@@ -1,8 +1,8 @@
 # Hướng dẫn triển khai - App chấm công khuôn mặt IDS
 
 Ứng dụng gồm 2 phần:
-- **Frontend**: `index.html` + `sw.js` — host miễn phí trên GitHub Pages, chạy trong trình duyệt điện thoại/máy tính.
-- **Backend**: `Code.gs` — chạy trên Google Apps Script, gắn với 1 Google Sheet dùng làm cơ sở dữ liệu.
+- **Frontend**: `index.html` (chấm công), `bao-cao.html` (dashboard báo cáo cho quản lý), `config.js` (cấu hình dùng chung), `sw.js` — host miễn phí trên GitHub Pages, chạy trong trình duyệt điện thoại/máy tính.
+- **Backend**: `Code.gs` — chạy trên Google Apps Script, gắn với 1 Google Sheet dùng làm cơ sở dữ liệu, và lưu ảnh bằng chứng chấm công vào Google Drive của cùng tài khoản.
 
 ---
 
@@ -16,7 +16,9 @@
    - Lần đầu chạy, Google sẽ hỏi cấp quyền — chọn tài khoản của Sếp, bấm **Advanced → Go to (tên project) (unsafe)** → **Allow**. Đây là quyền cho chính script của Sếp truy cập Sheet của Sếp, hoàn toàn bình thường.
    - Sau khi chạy xong, quay lại Google Sheet sẽ thấy tự động có 7 sheet mới: `NhanVien`, `MauKhuonMat`, `ChamCong`, `DiaDiem`, `CauHinh`, `NhatKyDangKy`, `CanhBaoNhanDien`.
 
-> **Nếu Sếp đã triển khai từ trước và giờ chỉ cập nhật `Code.gs` mới** (bản có thêm cảnh báo nhận diện bất thường): dán đè `Code.gs` mới vào Apps Script Editor như cũ, **Save**, chạy lại `khoiTaoHeThong` một lần nữa (an toàn, không xoá dữ liệu cũ - hàm chỉ tạo thêm sheet `CanhBaoNhanDien` nếu chưa có), rồi vào **Deploy → Manage deployments → biểu tượng bút chì → Version: New version → Deploy** để bản Code.gs mới có hiệu lực (Script Properties như APP_TOKEN/ADMIN_PIN giữ nguyên, không cần đổi lại).
+> **Nếu Sếp đã triển khai từ trước và giờ chỉ cập nhật `Code.gs` mới** (bản có thêm ảnh bằng chứng + chống giả mạo GPS + dashboard): dán đè `Code.gs` mới vào Apps Script Editor như cũ, **Save**, chạy lại `khoiTaoHeThong` một lần nữa (an toàn, không xoá dữ liệu cũ - hàm chỉ tự thêm các cột/sheet còn thiếu vào CUỐI, ví dụ 3 cột mới `AnhBangChung`, `CoNghiNgoGPS`, `LyDoNghiNgoGPS` trong sheet `ChamCong`), rồi vào **Deploy → Manage deployments → biểu tượng bút chì → Version: New version → Deploy** để bản Code.gs mới có hiệu lực (Script Properties như APP_TOKEN/ADMIN_PIN giữ nguyên, không cần đổi lại).
+>
+> **Quan trọng:** bản này có thêm tính năng lưu ảnh vào Google Drive, nên ở một trong các bước tiếp theo (chạy lại `khoiTaoHeThong`, bấm Deploy, hoặc lần chấm công đầu tiên có lưu ảnh thành công), Google có thể hiện thêm màn hình xin quyền truy cập Drive ("Xem, chỉnh sửa, tạo và xoá các file Google Drive của bạn" hoặc tương tự) - đây là quyền cần thiết để lưu ảnh bằng chứng, bấm **Allow** như các quyền trước.
 6. **Đổi token & PIN bí mật** (bước rất quan trọng, đừng bỏ qua):
    - Trong Apps Script, vào **Project Settings (biểu tượng bánh răng bên trái) → Script Properties**.
    - Sẽ thấy 2 dòng `APP_TOKEN` và `ADMIN_PIN` (giá trị mặc định tạm thời). Bấm sửa, đổi sang giá trị bí mật riêng của Sếp (chuỗi khó đoán, không dùng lại giá trị cũ).
@@ -32,9 +34,9 @@
 
 ---
 
-## Phần 2 — Cập nhật `index.html`
+## Phần 2 — Cập nhật `config.js`
 
-Mở file `index.html`, tìm đoạn `CONFIG` gần đầu phần `<script>`:
+Mở file `config.js` (dùng chung cho cả `index.html` và `bao-cao.html`):
 
 ```js
 const CONFIG = {
@@ -46,15 +48,15 @@ const CONFIG = {
 - Dán **Web app URL** đã copy ở bước 7 vào `WEB_APP_URL`.
 - Dán **APP_TOKEN** mới (đã đổi ở bước 6) vào `APP_TOKEN` — phải khớp đúng với giá trị trong Script Properties.
 
-Lưu file.
+Lưu file. Chỉ cần sửa 1 chỗ này, cả trang chấm công lẫn trang báo cáo đều tự dùng theo.
 
 ---
 
-## Phần 3 — Deploy `index.html` lên GitHub Pages
+## Phần 3 — Deploy lên GitHub Pages
 
-Nếu repo `cham-cong-ids` đã bật GitHub Pages từ trước (đúng như URL hiện tại `https://quachtruongvimar131997-commits.github.io/cham-cong-ids/`), Sếp chỉ cần:
+Nếu repo đã bật GitHub Pages từ trước, Sếp chỉ cần:
 
-1. Commit các thay đổi (`index.html`, `sw.js` mới thêm) và **push** lên nhánh đang được GitHub Pages sử dụng (thường là `main`).
+1. Commit các thay đổi (`index.html`, `bao-cao.html`, `config.js`, `sw.js`) và **push** lên nhánh đang được GitHub Pages sử dụng (thường là `main`).
 2. Đợi khoảng 1-2 phút để GitHub Pages build lại, sau đó mở lại URL để kiểm tra.
 
 Nếu cần bật GitHub Pages từ đầu: vào repo trên GitHub → **Settings → Pages** → chọn branch `main`, thư mục `/ (root)` → **Save**.
@@ -74,9 +76,12 @@ Mã nhân viên, họ tên, trạng thái (`Hoạt động` / `Đã khóa`), ng�
 Mỗi dòng là 1 mẫu khuôn mặt (128 số dạng JSON). Hệ thống tự tính **trung bình** tất cả mẫu của 1 mã NV để nhận diện — càng nhiều mẫu (qua "Bổ sung mẫu") càng chính xác.
 
 ### Sheet `ChamCong`
-| ThoiGian | MaNV | HoTen | LoaiChamCong | Lat | Lng | DiaDiem | KhoangCachServer(m) | KhoangCachClient(m) | TrongVungServer | KetQua | LyDoTuChoi |
-|---|---|---|---|---|---|---|---|---|---|---|---|
+| ThoiGian | MaNV | HoTen | LoaiChamCong | Lat | Lng | DiaDiem | KhoangCachServer(m) | KhoangCachClient(m) | TrongVungServer | KetQua | LyDoTuChoi | AnhBangChung | CoNghiNgoGPS | LyDoNghiNgoGPS |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 Nhật ký toàn bộ lượt chấm công, kể cả lượt bị từ chối (`KetQua` = `Từ chối`, có ghi `LyDoTuChoi`). Đây là sheet dùng để làm Pivot Table / Looker Studio xem báo cáo.
+
+- `AnhBangChung`: link Google Drive tới ảnh chụp lúc chấm công thành công (chỉ tài khoản Google chủ script mới mở xem được, vì file lưu private mặc định). Ảnh nằm trong thư mục Drive `ChamCong_AnhBangChung/yyyy-MM-dd/`.
+- `CoNghiNgoGPS` (TRUE/FALSE) + `LyDoNghiNgoGPS`: cờ nghi ngờ giả mạo vị trí (độ chính xác GPS bất thường, 2 lần đọc GPS trùng khớp tuyệt đối, hoặc tốc độ di chuyển phi thực tế so với lần chấm công trước). **Chỉ đánh dấu để quản lý xem lại, KHÔNG tự động từ chối chấm công** - tránh chặn nhầm làm sai lương nếu heuristic báo sai.
 
 ### Sheet `DiaDiem`
 | Ten | Lat | Lng | BanKinh(m) |
@@ -106,12 +111,14 @@ Mỗi khi ai đó quét mặt ở tab "Chấm công" nhưng **không khớp vớ
 
 ---
 
-## Xem báo cáo (action `report`)
+## Xem báo cáo - trang `bao-cao.html`
 
-Backend có sẵn action `report` trả JSON tổng hợp giờ công, số lần đi trễ, số lần bị từ chối theo từng nhân viên. Không có giao diện riêng trong `index.html` (theo đúng yêu cầu), nhưng Sếp có thể:
-- Mở Pivot Table ngay trên sheet `ChamCong` (Insert → Pivot table), hoặc
-- Kết nối sheet `ChamCong` với **Looker Studio** để có dashboard trực quan, hoặc
-- Gọi trực tiếp: `WEB_APP_URL?action=report&token=...&tuNgay=2026-09-01&denNgay=2026-09-30` để lấy JSON.
+Mở `bao-cao.html` (có link "📊 Xem báo cáo quản lý" ngay trong `index.html`), nhập mã PIN quản trị để mở khoá, chọn khoảng ngày (mặc định từ đầu tháng tới hôm nay), có thể lọc theo mã nhân viên. Trang hiển thị:
+- 5 thẻ thống kê nhanh: số nhân viên có chấm công, tổng giờ công, số lượt đi trễ, số lượt bị từ chối, số lượt nghi ngờ GPS giả mạo.
+- Bảng tổng hợp giờ công / đi trễ / từ chối theo từng nhân viên.
+- Bảng nhật ký chi tiết (tối đa 300 dòng gần nhất) kèm nút "Xem ảnh" (ảnh bằng chứng lưu trên Drive, chỉ tài khoản Google chủ script mở được) và nhãn "Nghi ngờ" nếu GPS bị đánh dấu bất thường (hover vào nhãn để xem lý do).
+
+Ngoài dashboard này, dữ liệu thô vẫn nằm sạch trong sheet `ChamCong` nên Sếp vẫn có thể tự làm Pivot Table hoặc kết nối Looker Studio nếu muốn phân tích sâu hơn. Cũng có thể gọi thẳng API: `WEB_APP_URL?action=report&token=...&tuNgay=2026-09-01&denNgay=2026-09-30` hoặc `WEB_APP_URL?action=listChamCong&token=...&tuNgay=...&denNgay=...` để lấy JSON thô.
 
 ---
 
@@ -132,3 +139,7 @@ Backend có sẵn action `report` trả JSON tổng hợp giờ công, số lầ
 - [ ] Sửa thử 1 dòng trong sheet `DiaDiem` (đổi bán kính hoặc thêm địa điểm mới) → mở lại app, kiểm tra hành vi chấm công thay đổi theo đúng dữ liệu mới mà không cần sửa code.
 - [ ] Tắt mạng giữa chừng lúc app đang tải mô hình → phải thấy thông báo lỗi thân thiện + nút "Thử lại", không phải màn hình trắng treo mãi.
 - [ ] Mở DevTools → tab Console trên trang live, kiểm tra không có dòng đỏ báo lỗi chặn bởi Content-Security-Policy (nếu có, nghĩa là cần nới thêm domain trong thẻ CSP ở đầu `index.html`).
+- [ ] Chấm công thành công 1 lần → mở Google Drive của tài khoản chạy script, kiểm tra có thư mục `ChamCong_AnhBangChung/<ngày hôm nay>/` chứa 1 file ảnh mới, và cột `AnhBangChung` trong sheet `ChamCong` có link tới đúng file đó.
+- [ ] Mở `bao-cao.html`, nhập đúng PIN → phải thấy đủ thẻ thống kê + 2 bảng có dữ liệu của lượt chấm công vừa test; bấm "Xem ảnh" ở dòng vừa chấm công phải mở đúng ảnh trên Drive.
+- [ ] Đổi ngày hệ thống hoặc chờ >3 tiếng rồi chấm công lần 2 ở đúng 1 địa điểm → cột `CoNghiNgoGPS` phải là FALSE (không báo nghi ngờ nhầm cho hành vi bình thường).
+- [ ] (Tuỳ chọn, khó test thủ công chính xác) Nếu có 2 điện thoại, thử chấm công tài khoản test ở 2 vị trí cách xa nhau trong thời gian ngắn (<3 tiếng) → cột `CoNghiNgoGPS` nên bật TRUE với lý do "Tốc độ di chuyển... phi thực tế", nhưng **chấm công vẫn phải được ghi nhận thành công** (không bị chặn), đúng thiết kế "chỉ cảnh báo, không chặn lương".

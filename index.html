@@ -9,6 +9,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; worker-src 'self'; base-uri 'self'; form-action 'self';">
 <title>Chấm công khuôn mặt - IDS</title>
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="config.js"></script>
 <style>
   :root {
     --primary: #1a73e8;
@@ -117,6 +118,9 @@
   <div class="tab active" data-tab="checkin">Chấm công</div>
   <div class="tab" data-tab="register">Đăng ký nhân viên</div>
 </div>
+<div style="text-align:center; padding:8px; background:#fff; border-bottom:1px solid #eee;">
+  <a href="bao-cao.html" style="color:var(--primary); font-size:13px; text-decoration:none;">📊 Xem báo cáo quản lý</a>
+</div>
 
 <div class="container">
 
@@ -184,10 +188,12 @@
       <button id="reg-save" class="success hidden">Lưu</button>
 
       <div class="note-box">
-        Lưu ý: tab "Chấm công" đã có kiểm tra thử thách ngẫu nhiên (chớp mắt/quay đầu/gật đầu) để chống ảnh tĩnh,
-        nhưng hệ thống <strong>vẫn chưa chống tuyệt đối được video call/deepfake phản ứng trực tiếp</strong>.
-        Quản lý nên thỉnh thoảng đối chiếu ngẫu nhiên camera an ninh tại kho với log chấm công, và xem sheet
-        "CanhBaoNhanDien" để phát hiện các lượt cố tình quét mặt không khớp bất thường.
+        Lưu ý: tab "Chấm công" có kiểm tra thử thách ngẫu nhiên (chớp mắt/quay đầu/gật đầu) để chống ảnh tĩnh,
+        tự lưu <strong>ảnh bằng chứng</strong> vào Google Drive mỗi lần chấm công thành công, và tự đánh dấu
+        <strong>nghi ngờ giả mạo GPS</strong> (không tự chặn, chỉ gắn cờ) khi có dấu hiệu bất thường. Hệ thống
+        <strong>vẫn chưa chống tuyệt đối được video call/deepfake phản ứng trực tiếp</strong> hay GPS giả ở mức
+        hệ điều hành. Quản lý nên xem trang <a href="bao-cao.html" target="_blank">📊 Báo cáo</a> định kỳ để rà
+        soát các lượt bị đánh dấu nghi ngờ, đối chiếu ảnh bằng chứng và camera an ninh khi cần.
       </div>
     </div>
   </div>
@@ -195,19 +201,7 @@
 </div>
 
 <script>
-/* ======================= CẤU HÌNH - CHỈNH Ở ĐÂY ======================= */
-const CONFIG = {
-  // URL Web App sau khi deploy Google Apps Script (xem HUONG_DAN.md)
-  WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbxb6MDE9Gy_7_1rKIT3G83ukJryt0Maep4xGmftwiB3AQHg0NmO331fOInC-jC6BJh_/exec',
-  // Phải khớp với APP_TOKEN trong Script Properties của Code.gs.
-  // GHI CHÚ BẢO MẬT: đây là code chạy trong trình duyệt, ai mở DevTools cũng đọc
-  // được giá trị này - KHÔNG có cách nào giấu tuyệt đối một secret ở phía client.
-  // Token chỉ có tác dụng chặn truy cập ngẫu nhiên; toàn bộ quyết định quan trọng
-  // (đúng nhân viên, đúng vị trí, đúng PIN, chống trùng lặp...) đều được Code.gs
-  // tự kiểm tra lại ở server, không tin dữ liệu client tự khai.
-  APP_TOKEN: 'Ids5922@'
-};
-/* ======================================================================= */
+/* CONFIG (WEB_APP_URL, APP_TOKEN) nằm ở file config.js dùng chung với bao-cao.html */
 
 let modelsReady = false;
 let employees = []; // {maNV, hoTen, descriptor: Float32Array}
@@ -403,6 +397,30 @@ let ciStream = null;
 let ciMatched = null; // {maNV, hoTen}
 let ciGpsData = null;
 let ciDangXuLy = false;
+let ciAnhBangChung = null; // ảnh JPEG base64 chụp lúc quét mặt, gửi kèm khi chấm công thành công
+
+/** Bọc getCurrentPosition thành Promise cho dễ dùng với async/await. */
+function layViTriGPS() {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 });
+  });
+}
+
+/** Chụp 1 khung hình hiện tại của video thành ảnh JPEG nén nhỏ (base64) làm bằng chứng chấm công. */
+function chupAnhTuVideo(videoEl) {
+  try {
+    const canvas = document.createElement('canvas');
+    const chieuRongMax = 360;
+    const ti = videoEl.videoWidth ? chieuRongMax / videoEl.videoWidth : 1;
+    canvas.width = videoEl.videoWidth ? Math.round(videoEl.videoWidth * ti) : chieuRongMax;
+    canvas.height = videoEl.videoHeight ? Math.round(videoEl.videoHeight * ti) : 270;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.6);
+  } catch (e) {
+    return null; // không chặn chấm công nếu chụp ảnh lỗi
+  }
+}
 
 document.getElementById('ci-start').addEventListener('click', async () => {
   setStatus(ciStatus, 'info', 'Đang bật camera...');
@@ -475,12 +493,21 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
     document.getElementById('ci-match').classList.remove('hidden');
     ciStatus.classList.add('hidden');
 
+    // Chụp sẵn 1 ảnh làm bằng chứng chấm công (chỉ gửi lên server nếu chấm công thành công).
+    ciAnhBangChung = chupAnhTuVideo(ciVideo);
+
     const gpsStatus = document.getElementById('ci-gps');
     setStatus(gpsStatus, 'info', 'Đang lấy vị trí GPS...');
-    navigator.geolocation.getCurrentPosition(pos => {
-      const { latitude, longitude } = pos.coords;
+    try {
+      const doc1 = await layViTriGPS();
+      await new Promise(r => setTimeout(r, 1500));
+      const doc2 = await layViTriGPS();
+      // Lấy lần đọc thứ 2 làm toạ độ chính thức (GPS thường ổn định hơn sau vài giây),
+      // và so 2 lần đọc để phát hiện dấu hiệu GPS giả (xem ghi chú trong Code.gs).
+      const { latitude, longitude, accuracy } = doc2.coords;
+      const doJitterGps = haversine(doc1.coords.latitude, doc1.coords.longitude, latitude, longitude);
       const site = nearestSite(latitude, longitude);
-      ciGpsData = { lat: latitude, lng: longitude, site };
+      ciGpsData = { lat: latitude, lng: longitude, doChinhXacGps: accuracy, doJitterGps, site };
       if (!site) {
         setStatus(gpsStatus, 'err', 'Hệ thống chưa cấu hình địa điểm chấm công.');
         return;
@@ -496,9 +523,9 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
         document.getElementById('ci-in').disabled = true;
         document.getElementById('ci-out').disabled = true;
       }
-    }, err => {
+    } catch (err) {
       setStatus(gpsStatus, 'err', 'Không lấy được vị trí GPS: ' + err.message + '. Hãy bật định vị và cho phép trình duyệt truy cập.');
-    }, { enableHighAccuracy: true, timeout: 15000 });
+    }
   } finally {
     btnCapture.disabled = false;
     ciDangXuLy = false;
@@ -508,7 +535,7 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
 document.getElementById('ci-retry').addEventListener('click', () => {
   document.getElementById('ci-match').classList.add('hidden');
   document.getElementById('ci-challenge').classList.add('hidden');
-  ciMatched = null; ciGpsData = null;
+  ciMatched = null; ciGpsData = null; ciAnhBangChung = null;
   document.getElementById('ci-in').disabled = true;
   document.getElementById('ci-out').disabled = true;
 });
@@ -529,6 +556,9 @@ async function submitCheckin(loai) {
         loaiChamCong: loai,
         lat: ciGpsData.lat,
         lng: ciGpsData.lng,
+        anhBase64: ciAnhBangChung || undefined,
+        doChinhXacGps: ciGpsData.doChinhXacGps,
+        doJitterGps: ciGpsData.doJitterGps,
         // Các giá trị dưới đây chỉ để đối chiếu/ghi log - server tự tính lại, không tin theo client.
         khoangCach: ciGpsData.site.khoangCach,
         trongVung: ciGpsData.site.khoangCach <= ciGpsData.site.banKinh
@@ -546,7 +576,7 @@ async function submitCheckin(loai) {
   document.getElementById('ci-match').classList.add('hidden');
   btn.textContent = loai === 'Vào' ? 'Chấm công VÀO' : 'Chấm công RA';
   btn.disabled = true;
-  ciMatched = null; ciGpsData = null;
+  ciMatched = null; ciGpsData = null; ciAnhBangChung = null;
 }
 document.getElementById('ci-in').addEventListener('click', () => submitCheckin('Vào'));
 document.getElementById('ci-out').addEventListener('click', () => submitCheckin('Ra'));

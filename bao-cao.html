@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self';">
+<title>Báo cáo chấm công - IDS</title>
+<script src="config.js"></script>
+<style>
+  :root {
+    --primary: #1a73e8;
+    --danger: #d93025;
+    --success: #188038;
+    --warn: #b06000;
+    --bg: #f4f6f8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg); color: #1f1f1f; padding-bottom: 40px;
+  }
+  header { background: var(--primary); color: #fff; padding: 16px 20px; text-align: center; }
+  .header-brand { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 900px; margin: 0 auto; }
+  .header-brand div { text-align: left; }
+  .header-logo { height: 44px; width: 44px; object-fit: contain; background: #fff; border-radius: 8px; padding: 3px; flex-shrink: 0; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+  .back-link { display: block; text-align: center; padding: 8px; background: #fff; border-bottom: 1px solid #eee; font-size: 13px; }
+  .back-link a { color: var(--primary); text-decoration: none; }
+  .container { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  label { display: block; font-size: 13px; color: #555; margin: 10px 0 4px; }
+  input[type=text], input[type=password], input[type=date] {
+    width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px;
+  }
+  button {
+    padding: 13px; border: none; border-radius: 8px; font-size: 15px;
+    font-weight: 600; margin-top: 10px; cursor: pointer; color: #fff; background: var(--primary);
+  }
+  button.full { width: 100%; }
+  .status { padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-top: 10px; }
+  .status.info { background: #e8f0fe; color: #174ea6; }
+  .status.ok { background: #e6f4ea; color: #137333; }
+  .status.err { background: #fce8e6; color: #a50e0e; }
+  .status.warn { background: #fef7e0; color: #b06000; }
+  .hidden { display: none !important; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .small { font-size: 12px; color: #777; }
+
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 4px; }
+  .stat-card { background: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); text-align: center; }
+  .stat-card .so { font-size: 24px; font-weight: 700; color: var(--primary); }
+  .stat-card.warn .so { color: var(--warn); }
+  .stat-card.danger .so { color: var(--danger); }
+  .stat-card .nhan { font-size: 12px; color: #666; margin-top: 4px; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; }
+  th { color: #555; font-weight: 600; background: #fafbfc; }
+  .bar-track { background: #eef1f4; border-radius: 6px; height: 10px; width: 100px; overflow: hidden; display: inline-block; vertical-align: middle; }
+  .bar-fill { background: var(--primary); height: 100%; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.ok { background: #e6f4ea; color: #137333; }
+  .badge.err { background: #fce8e6; color: #a50e0e; }
+  .badge.warn { background: #fef7e0; color: #b06000; }
+  a.anh-link { color: var(--primary); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <img src="Logo_IDS.jpg" alt="Logo IDS" class="header-logo">
+    <div>
+      <h1>Báo cáo chấm công</h1>
+      <p>Công ty CP DV PP Tổng Hợp Quốc Tế (IDS)</p>
+    </div>
+  </div>
+</header>
+<div class="back-link"><a href="index.html">← Quay lại trang chấm công</a></div>
+
+<div class="container">
+
+  <div class="card" id="pin-card">
+    <label>Mã PIN quản trị</label>
+    <input type="password" id="pin-input" placeholder="Nhập mã PIN để xem báo cáo">
+    <button class="full" id="pin-unlock">Mở khóa</button>
+    <div id="pin-status" class="status hidden"></div>
+  </div>
+
+  <div id="report-area" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>Từ ngày</label>
+          <input type="date" id="tu-ngay">
+        </div>
+        <div>
+          <label>Đến ngày</label>
+          <input type="date" id="den-ngay">
+        </div>
+      </div>
+      <label>Lọc theo mã nhân viên (để trống = tất cả)</label>
+      <input type="text" id="loc-manv" placeholder="VD: NV001">
+      <button class="full" id="xem-bao-cao">Xem báo cáo</button>
+      <div id="report-status" class="status hidden"></div>
+    </div>
+
+    <div class="cards-grid" id="cards-grid"></div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Tổng hợp theo nhân viên</h3>
+      <div class="table-wrap">
+        <table id="table-tonghop">
+          <thead><tr><th>Mã NV</th><th>Họ tên</th><th>Giờ công</th><th>Đi trễ</th><th>Từ chối</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Nhật ký chấm công chi tiết (mới nhất trước, tối đa 300 dòng)</h3>
+      <div class="table-wrap">
+        <table id="table-chitiet">
+          <thead><tr><th>Thời gian</th><th>Mã NV</th><th>Họ tên</th><th>Loại</th><th>Địa điểm</th><th>Kết quả</th><th>Lý do</th><th>Ảnh</th><th>GPS</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let adminPin = null;
+
+document.getElementById('pin-unlock').addEventListener('click', async () => {
+  const pinStatus = document.getElementById('pin-status');
+  const pin = document.getElementById('pin-input').value;
+  if (!pin) { alert('Vui lòng nhập mã PIN.'); return; }
+  setStatus(pinStatus, 'info', 'Đang kiểm tra...');
+  try {
+    const res = await fetch(CONFIG.WEB_APP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'verifyPin', pin })
+    });
+    const data = await res.json();
+    if (data.ok && data.valid) {
+      adminPin = pin;
+      document.getElementById('pin-card').classList.add('hidden');
+      document.getElementById('report-area').classList.remove('hidden');
+      datMacDinhKhoangNgay();
+      xemBaoCao();
+    } else if (data.khoa) {
+      setStatus(pinStatus, 'err', data.error || 'Đã khóa tạm thời do nhập sai nhiều lần.');
+    } else {
+      setStatus(pinStatus, 'err', 'Sai mã PIN.');
+    }
+  } catch (e) {
+    setStatus(pinStatus, 'err', 'Không kiểm tra được PIN: ' + e.message);
+  }
+});
+
+function setStatus(el, type, msg) {
+  el.className = 'status ' + type;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function dinhDangNgay(d) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+function datMacDinhKhoangNgay() {
+  const homNay = new Date();
+  const dauThang = new Date(homNay.getFullYear(), homNay.getMonth(), 1);
+  document.getElementById('tu-ngay').value = dinhDangNgay(dauThang);
+  document.getElementById('den-ngay').value = dinhDangNgay(homNay);
+}
+
+document.getElementById('xem-bao-cao').addEventListener('click', xemBaoCao);
+
+async function xemBaoCao() {
+  const reportStatus = document.getElementById('report-status');
+  const tuNgay = document.getElementById('tu-ngay').value;
+  const denNgay = document.getElementById('den-ngay').value;
+  const maNVLoc = document.getElementById('loc-manv').value.trim();
+  setStatus(reportStatus, 'info', 'Đang tải báo cáo...');
+
+  try {
+    const urlBaoCao = CONFIG.WEB_APP_URL + '?action=report&token=' + encodeURIComponent(CONFIG.APP_TOKEN) +
+      '&tuNgay=' + encodeURIComponent(tuNgay) + '&denNgay=' + encodeURIComponent(denNgay);
+    let urlChiTiet = CONFIG.WEB_APP_URL + '?action=listChamCong&token=' + encodeURIComponent(CONFIG.APP_TOKEN) +
+      '&tuNgay=' + encodeURIComponent(tuNgay) + '&denNgay=' + encodeURIComponent(denNgay) + '&limit=300';
+    if (maNVLoc) urlChiTiet += '&maNV=' + encodeURIComponent(maNVLoc);
+
+    const [resBaoCao, resChiTiet] = await Promise.all([fetch(urlBaoCao), fetch(urlChiTiet)]);
+    const baoCao = await resBaoCao.json();
+    const chiTiet = await resChiTiet.json();
+    if (!baoCao.ok) throw new Error(baoCao.error || 'Lỗi tải báo cáo tổng hợp.');
+    if (!chiTiet.ok) throw new Error(chiTiet.error || 'Lỗi tải nhật ký chi tiết.');
+
+    let tongHop = baoCao.tongHop || [];
+    if (maNVLoc) tongHop = tongHop.filter(x => x.maNV === maNVLoc);
+
+    veTheThongKe(tongHop, chiTiet.banGhi || []);
+    veBangTongHop(tongHop);
+    veBangChiTiet(chiTiet.banGhi || []);
+
+    reportStatus.classList.add('hidden');
+  } catch (e) {
+    setStatus(reportStatus, 'err', 'Lỗi: ' + e.message);
+  }
+}
+
+function veTheThongKe(tongHop, chiTiet) {
+  const tongGio = tongHop.reduce((s, x) => s + x.tongGioCong, 0);
+  const tongDiTre = tongHop.reduce((s, x) => s + x.soLanDiTre, 0);
+  const tongTuChoi = tongHop.reduce((s, x) => s + x.soLanTuChoi, 0);
+  const tongNghiNgoGps = chiTiet.filter(x => x.coNghiNgoGps).length;
+
+  const the = [
+    { so: tongHop.length, nhan: 'Nhân viên có chấm công', kieu: '' },
+    { so: Math.round(tongGio * 10) / 10, nhan: 'Tổng giờ công', kieu: '' },
+    { so: tongDiTre, nhan: 'Lượt đi trễ', kieu: 'warn' },
+    { so: tongTuChoi, nhan: 'Lượt bị từ chối', kieu: 'danger' },
+    { so: tongNghiNgoGps, nhan: 'Nghi ngờ GPS giả mạo', kieu: 'danger' }
+  ];
+  document.getElementById('cards-grid').innerHTML = the.map(t =>
+    '<div class="stat-card ' + t.kieu + '"><div class="so">' + t.so + '</div><div class="nhan">' + t.nhan + '</div></div>'
+  ).join('');
+}
+
+function veBangTongHop(tongHop) {
+  const gioMax = Math.max(1, ...tongHop.map(x => x.tongGioCong));
+  const tbody = document.querySelector('#table-tonghop tbody');
+  tbody.innerHTML = tongHop.length === 0
+    ? '<tr><td colspan="5" class="small">Không có dữ liệu trong khoảng ngày này.</td></tr>'
+    : tongHop.map(x => (
+        '<tr><td>' + escHtml(x.maNV) + '</td><td>' + escHtml(x.hoTen) + '</td>' +
+        '<td><span class="bar-track"><span class="bar-fill" style="width:' + Math.round(x.tongGioCong / gioMax * 100) + '%"></span></span> ' + x.tongGioCong + 'h</td>' +
+        '<td>' + x.soLanDiTre + '</td><td>' + x.soLanTuChoi + '</td></tr>'
+      )).join('');
+}
+
+function veBangChiTiet(banGhi) {
+  const tbody = document.querySelector('#table-chitiet tbody');
+  tbody.innerHTML = banGhi.length === 0
+    ? '<tr><td colspan="9" class="small">Không có dữ liệu trong khoảng ngày này.</td></tr>'
+    : banGhi.map(r => {
+        const thoiGian = new Date(r.thoiGian).toLocaleString('vi-VN');
+        const ketQuaBadge = r.ketQua === 'Thành công'
+          ? '<span class="badge ok">Thành công</span>'
+          : '<span class="badge err">Từ chối</span>';
+        const anh = r.anhBangChung
+          ? '<a class="anh-link" href="' + escAttr(r.anhBangChung) + '" target="_blank" rel="noopener">Xem ảnh</a>'
+          : '<span class="small">-</span>';
+        const gps = r.coNghiNgoGps
+          ? '<span class="badge warn" title="' + escAttr(r.lyDoNghiNgoGps) + '">Nghi ngờ</span>'
+          : '<span class="small">-</span>';
+        return '<tr><td>' + thoiGian + '</td><td>' + escHtml(r.maNV) + '</td><td>' + escHtml(r.hoTen) + '</td>' +
+          '<td>' + escHtml(r.loaiChamCong) + '</td><td>' + escHtml(r.diaDiem) + '</td><td>' + ketQuaBadge + '</td>' +
+          '<td>' + escHtml(r.lyDoTuChoi) + '</td><td>' + anh + '</td><td>' + gps + '</td></tr>';
+      }).join('');
+}
+
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function escAttr(s) { return escHtml(s); }
+</script>
+</body>
+</html>

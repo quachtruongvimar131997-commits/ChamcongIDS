@@ -10,7 +10,14 @@
  *   - addSample       : bổ sung mẫu khuôn mặt cho nhân viên đã có (POST, cần adminPin)
  *   - verifyPin       : xác thực mã PIN quản trị phía server (POST)
  *   - report          : báo cáo tổng hợp giờ công / đi trễ / từ chối (GET)
+ *   - listChamCong    : danh sách chi tiết các lượt chấm công gần đây, cho dashboard (GET)
  *   - canhBaoKhongKhop: ghi log khi quét mặt không khớp nhân viên nào (POST, chống dò)
+ *
+ * PHIÊN BẢN NÀY THÊM: ảnh bằng chứng lưu vào Google Drive khi chấm công thành công,
+ * và cờ nghi ngờ giả mạo GPS (không tự động chặn - chỉ đánh dấu để quản lý xem lại,
+ * tránh chặn nhầm ảnh hưởng lương nếu heuristic sai). Vì có ghi file vào Drive, lần
+ * deploy lại đầu tiên sau khi cập nhật file này Google sẽ hỏi cấp thêm quyền Drive -
+ * đây là quyền cần thiết, bấm Allow như các lần trước.
  *
  * GIỚI HẠN BẢO MẬT CẦN BIẾT:
  * `APP_TOKEN` nằm trong index.html (chạy ở trình duyệt) nên về nguyên tắc
@@ -47,6 +54,9 @@ function doGet(e) {
     if (action === 'listEmployees') return jsonOut_(layDanhSachNhanVien_());
     if (action === 'listSites') return jsonOut_(layDanhSachDiaDiem_());
     if (action === 'report') return jsonOut_(taoBaoCao_(e.parameter.tuNgay, e.parameter.denNgay));
+    if (action === 'listChamCong') {
+      return jsonOut_(layDanhSachChamCong_(e.parameter.tuNgay, e.parameter.denNgay, e.parameter.maNV, e.parameter.limit));
+    }
 
     return jsonOut_({ ok: false, error: 'Action không hợp lệ: ' + action });
   } catch (err) {
@@ -204,6 +214,15 @@ function trungBinhDescriptor_(list) {
 /**
  * Xử lý một lượt chấm công. KHÔNG tin bất kỳ dữ liệu "kết luận" nào từ client
  * (hoTen, trongVung, khoangCach...) - chỉ dùng lat/lng thô để tự tính lại.
+ *
+ * Về chống giả mạo GPS: trình duyệt/web app KHÔNG có cách nào phát hiện chắc chắn
+ * 100% việc dùng app "giả GPS" (chỉ app gốc Android mới đọc được cờ isFromMockProvider,
+ * web app không truy cập được). Ta dùng 2 tín hiệu gián tiếp để ĐÁNH DẤU NGHI NGỜ
+ * (không tự động từ chối, để tránh chặn nhầm ảnh hưởng lương thật):
+ *   - Độ chính xác GPS bất thường tốt hoặc bằng 0 (định vị giả thường báo số đẹp).
+ *   - 2 lần đọc GPS cách nhau ~1.5s cho toạ độ giống hệt nhau (GPS thật luôn có nhiễu nhỏ).
+ *   - Tốc độ di chuyển suy ra từ lần chấm công liền trước "phi thực tế" (ví dụ >150km/h).
+ * Quản lý xem cột CoNghiNgoGPS/LyDoNghiNgoGPS trong sheet ChamCong để rà soát thủ công.
  */
 function xuLyChamCong_(body) {
   var maNV = String(body.maNV || '').trim();
@@ -272,8 +291,36 @@ function xuLyChamCong_(body) {
       }
     }
 
-    // 4) Hợp lệ - ghi nhận.
-    ghiNhatKyChamCong_(maNV, hoTen, loai, lat, lng, site.ten, site.khoangCach, body.khoangCach, true, 'Thành công', '');
+    // 4) Đánh dấu nghi ngờ giả mạo GPS (KHÔNG chặn chấm công - chỉ gắn cờ để quản lý xem lại).
+    var lyDoNghiNgo = [];
+    var doChinhXac = Number(body.doChinhXacGps);
+    if (!isNaN(doChinhXac) && doChinhXac > 0 && doChinhXac < 3) {
+      lyDoNghiNgo.push('Độ chính xác GPS bất thường tốt (' + doChinhXac + 'm)');
+    }
+    var doJitter = Number(body.doJitterGps);
+    if (!isNaN(doJitter) && body.doJitterGps !== undefined && body.doJitterGps !== null && doJitter === 0) {
+      lyDoNghiNgo.push('2 lần đọc GPS liên tiếp giống hệt nhau (không có nhiễu tự nhiên)');
+    }
+    if (banGhiCuoi && banGhiCuoi.lat != null && banGhiCuoi.lng != null) {
+      var lechGioMs = new Date().getTime() - banGhiCuoi.thoiGian.getTime();
+      if (lechGioMs > 0 && lechGioMs < 3 * 3600000) { // chỉ xét nếu cách nhau dưới 3 tiếng
+        var khoangCachDiChuyen = haversine_(lat, lng, banGhiCuoi.lat, banGhiCuoi.lng);
+        var tocDoKmh = (khoangCachDiChuyen / 1000) / (lechGioMs / 3600000);
+        if (tocDoKmh > 150) {
+          lyDoNghiNgo.push('Tốc độ di chuyển suy ra ~' + Math.round(tocDoKmh) + 'km/h so với lần chấm công trước - phi thực tế');
+        }
+      }
+    }
+    var coNghiNgoGps = lyDoNghiNgo.length > 0;
+
+    // 5) Lưu ảnh bằng chứng vào Drive (best-effort - lỗi lưu ảnh không chặn chấm công).
+    var anhUrl = '';
+    if (body.anhBase64) {
+      anhUrl = luuAnhBangChung_(maNV, loai, body.anhBase64);
+    }
+
+    // 6) Hợp lệ - ghi nhận.
+    ghiNhatKyChamCong_(maNV, hoTen, loai, lat, lng, site.ten, site.khoangCach, body.khoangCach, true, 'Thành công', '', anhUrl, coNghiNgoGps, lyDoNghiNgo.join('; '));
     return { ok: true, thoiGian: new Date().toISOString(), diaDiem: site.ten, hoTen: hoTen };
   } finally {
     lock.releaseLock();
@@ -284,20 +331,53 @@ function timBanGhiChamCongGanNhat_(sh, maNV) {
   var data = sh.getDataRange().getValues();
   for (var i = data.length - 1; i >= 1; i--) {
     if (String(data[i][1]) === maNV && String(data[i][10]) === 'Thành công') {
-      return { loaiChamCong: String(data[i][3]), thoiGian: new Date(data[i][0]) };
+      return {
+        loaiChamCong: String(data[i][3]),
+        thoiGian: new Date(data[i][0]),
+        lat: data[i][4] !== '' ? Number(data[i][4]) : null,
+        lng: data[i][5] !== '' ? Number(data[i][5]) : null
+      };
     }
   }
   return null;
 }
 
-function ghiNhatKyChamCong_(maNV, hoTen, loai, lat, lng, tenDiaDiem, khoangCachServer, khoangCachClient, trongVung, ketQua, lyDo) {
+function ghiNhatKyChamCong_(maNV, hoTen, loai, lat, lng, tenDiaDiem, khoangCachServer, khoangCachClient, trongVung, ketQua, lyDo, anhUrl, coNghiNgoGps, lyDoNghiNgoGps) {
   var sh = laySheet_('ChamCong');
   sh.appendRow([
     new Date(), maNV, hoTen, loai, lat, lng, tenDiaDiem || '',
     khoangCachServer != null ? Math.round(khoangCachServer) : '',
     khoangCachClient != null ? Math.round(khoangCachClient) : '',
-    trongVung, ketQua, lyDo || ''
+    trongVung, ketQua, lyDo || '',
+    anhUrl || '', !!coNghiNgoGps, lyDoNghiNgoGps || ''
   ]);
+}
+
+/**
+ * Lưu ảnh bằng chứng (base64 từ camera trình duyệt) vào Google Drive, trong thư mục
+ * "ChamCong_AnhBangChung/yyyy-MM-dd/". Trả về URL file, hoặc chuỗi rỗng nếu lưu thất
+ * bại (không throw - lỗi lưu ảnh không được phép làm hỏng việc ghi nhận chấm công).
+ */
+function luuAnhBangChung_(maNV, loai, base64) {
+  try {
+    var duLieu = base64.indexOf(',') !== -1 ? base64.split(',')[1] : base64; // bỏ tiền tố data:image/...;base64, nếu có
+    var bytes = Utilities.base64Decode(duLieu);
+    var tenNgay = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var thuMucGoc = layHoacTaoThuMuc_(DriveApp.getRootFolder(), 'ChamCong_AnhBangChung');
+    var thuMucNgay = layHoacTaoThuMuc_(thuMucGoc, tenNgay);
+    var tenFile = maNV + '_' + loai + '_' + new Date().getTime() + '.jpg';
+    var blob = Utilities.newBlob(bytes, 'image/jpeg', tenFile);
+    var file = thuMucNgay.createFile(blob);
+    return file.getUrl();
+  } catch (e) {
+    return '';
+  }
+}
+
+function layHoacTaoThuMuc_(thuMucCha, ten) {
+  var it = thuMucCha.getFoldersByName(ten);
+  if (it.hasNext()) return it.next();
+  return thuMucCha.createFolder(ten);
 }
 
 /* ============================= ĐĂNG KÝ NHÂN VIÊN ============================= */
@@ -504,6 +584,38 @@ function taoBaoCao_(tuNgayStr, denNgayStr) {
   return { ok: true, tuNgay: tuNgayStr, denNgay: denNgayStr, tongHop: tongHop, tuChoiChiTiet: tuChoiChiTiet };
 }
 
+/**
+ * Trả về danh sách CHI TIẾT từng lượt chấm công trong khoảng ngày (mới nhất trước),
+ * dùng cho trang dashboard bao-cao.html - gồm cả ảnh bằng chứng và cờ nghi ngờ GPS.
+ * Giới hạn số dòng trả về (mặc định 300) để tránh payload quá nặng trên điện thoại.
+ */
+function layDanhSachChamCong_(tuNgayStr, denNgayStr, maNVLoc, limitStr) {
+  var tuNgay = tuNgayStr ? new Date(tuNgayStr + 'T00:00:00') : new Date(0);
+  var denNgay = denNgayStr ? new Date(denNgayStr + 'T23:59:59') : new Date();
+  var limit = Number(limitStr) > 0 ? Number(limitStr) : 300;
+  maNVLoc = maNVLoc ? String(maNVLoc).trim() : '';
+
+  var sh = laySheet_('ChamCong');
+  var data = sh.getDataRange().getValues();
+  var ketQuaList = [];
+
+  for (var i = data.length - 1; i >= 1 && ketQuaList.length < limit; i--) {
+    var row = data[i];
+    var thoiGian = new Date(row[0]);
+    if (thoiGian < tuNgay || thoiGian > denNgay) continue;
+    var maNV = String(row[1]);
+    if (maNVLoc && maNV !== maNVLoc) continue;
+
+    ketQuaList.push({
+      thoiGian: row[0], maNV: maNV, hoTen: String(row[2]), loaiChamCong: String(row[3]),
+      diaDiem: String(row[6] || ''), ketQua: String(row[10]), lyDoTuChoi: String(row[11] || ''),
+      anhBangChung: String(row[12] || ''), coNghiNgoGps: !!row[13], lyDoNghiNgoGps: String(row[14] || '')
+    });
+  }
+
+  return { ok: true, banGhi: ketQuaList };
+}
+
 /* ============================= KHỞI TẠO HỆ THỐNG (CHẠY 1 LẦN) ============================= */
 
 /**
@@ -517,7 +629,7 @@ function khoiTaoHeThong() {
 
   taoSheetNeuChua_(ss, 'NhanVien', ['MaNV', 'HoTen', 'TrangThai', 'NgayTao']);
   taoSheetNeuChua_(ss, 'MauKhuonMat', ['MaNV', 'Descriptor(JSON)', 'NgayTao', 'Nguon']);
-  taoSheetNeuChua_(ss, 'ChamCong', ['ThoiGian', 'MaNV', 'HoTen', 'LoaiChamCong', 'Lat', 'Lng', 'DiaDiem', 'KhoangCachServer(m)', 'KhoangCachClient(m)', 'TrongVungServer', 'KetQua', 'LyDoTuChoi']);
+  taoSheetNeuChua_(ss, 'ChamCong', ['ThoiGian', 'MaNV', 'HoTen', 'LoaiChamCong', 'Lat', 'Lng', 'DiaDiem', 'KhoangCachServer(m)', 'KhoangCachClient(m)', 'TrongVungServer', 'KetQua', 'LyDoTuChoi', 'AnhBangChung', 'CoNghiNgoGPS', 'LyDoNghiNgoGPS']);
   taoSheetNeuChua_(ss, 'DiaDiem', ['Ten', 'Lat', 'Lng', 'BanKinh(m)']);
   taoSheetNeuChua_(ss, 'CauHinh', ['Key', 'Value', 'GhiChu']);
   taoSheetNeuChua_(ss, 'NhatKyDangKy', ['ThoiGian', 'MaNV', 'HoTen', 'HanhDong', 'ThietBi', 'KetQua']);
@@ -550,6 +662,25 @@ function taoSheetNeuChua_(ss, ten, headers) {
     sh = ss.insertSheet(ten);
     sh.appendRow(headers);
     sh.setFrozenRows(1);
+  } else {
+    damBaoCoCot_(sh, headers);
   }
   return sh;
+}
+
+/**
+ * Đảm bảo 1 sheet ĐÃ TỒN TẠI có đủ các cột header cần thiết - cột nào thiếu thì
+ * tự thêm vào CUỐI hàng tiêu đề (không đụng tới cột/dữ liệu cũ). Nhờ vậy chạy lại
+ * khoiTaoHeThong() trên hệ thống đã dùng từ trước vẫn an toàn để nâng cấp thêm cột
+ * mới (ví dụ bản nâng cấp thêm ảnh bằng chứng / cờ nghi ngờ GPS).
+ */
+function damBaoCoCot_(sh, headers) {
+  var lastCol = sh.getLastColumn();
+  var hienTai = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  headers.forEach(function (h) {
+    if (hienTai.indexOf(h) === -1) {
+      sh.getRange(1, sh.getLastColumn() + 1).setValue(h);
+      hienTai.push(h);
+    }
+  });
 }
