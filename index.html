@@ -44,6 +44,7 @@
   button.secondary { background: #5f6368; }
   button.success { background: var(--success); }
   button.danger { background: var(--danger); }
+  button.outline { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
   button:disabled { background: #bbb; cursor: not-allowed; }
   .status { padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-top: 10px; }
   .status.info { background: #e8f0fe; color: #174ea6; }
@@ -57,9 +58,43 @@
   .match-box { text-align: center; padding: 10px; }
   .match-box .name { font-size: 22px; font-weight: 700; margin: 6px 0 2px; }
   .match-box .conf { font-size: 13px; color: #666; }
+  .mode-toggle { display: flex; gap: 8px; margin-bottom: 4px; }
+  .mode-toggle button { margin-top: 0; }
+  .note-box {
+    background: #fef7e0; color: #7a5b00; border-radius: 8px; padding: 10px 12px;
+    font-size: 12px; margin-top: 12px; line-height: 1.5;
+  }
+
+  /* ---------- Màn hình tải ---------- */
+  #loading-overlay {
+    position: fixed; inset: 0; background: #fff; z-index: 999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px; text-align: center;
+  }
+  #loading-overlay .logo { font-size: 40px; margin-bottom: 6px; }
+  #loading-overlay h2 { margin: 0 0 6px; font-size: 18px; color: #1f1f1f; }
+  #loading-overlay .progress-track {
+    width: 100%; max-width: 320px; height: 8px; background: #e6e8eb; border-radius: 8px;
+    overflow: hidden; margin-top: 18px;
+  }
+  #loading-overlay .progress-fill {
+    height: 100%; width: 0%; background: var(--primary); transition: width .25s ease;
+  }
+  #loading-overlay .loading-text { margin-top: 10px; font-size: 13px; color: #666; min-height: 18px; }
+  #loading-overlay .loading-err { color: var(--danger); font-size: 13px; margin-top: 14px; }
+  #loading-overlay button { max-width: 220px; }
 </style>
 </head>
 <body>
+
+<div id="loading-overlay">
+  <div class="logo">📷</div>
+  <h2>Đang chuẩn bị ứng dụng chấm công...</h2>
+  <div class="progress-track"><div class="progress-fill" id="loading-fill"></div></div>
+  <div class="loading-text" id="loading-text">Đang khởi động...</div>
+  <div id="loading-err" class="loading-err hidden"></div>
+  <button id="loading-retry" class="hidden" style="margin-top:14px;">Thử lại</button>
+</div>
 
 <header>
   <h1>Chấm công bằng khuôn mặt</h1>
@@ -82,6 +117,7 @@
       </div>
       <button id="ci-start">Bật camera & bắt đầu</button>
       <button id="ci-capture" class="hidden">Chụp & nhận diện</button>
+      <div class="small" id="ci-hint" style="margin-top:6px;">Khi bấm "Chụp & nhận diện", hãy chớp mắt hoặc quay đầu nhẹ trong lúc quét để xác nhận là người thật.</div>
       <div id="ci-status" class="status hidden"></div>
     </div>
 
@@ -106,22 +142,38 @@
       <label>Mã PIN quản trị</label>
       <input type="password" id="reg-pin" placeholder="Nhập mã PIN để mở khóa đăng ký">
       <button id="reg-unlock">Mở khóa</button>
+      <div id="reg-pin-status" class="status hidden"></div>
+    </div>
+
+    <div class="card hidden" id="reg-mode-card">
+      <div class="mode-toggle">
+        <button id="reg-mode-new" class="outline">+ Nhân viên mới</button>
+        <button id="reg-mode-add" class="outline">Bổ sung mẫu</button>
+      </div>
+      <div class="small" id="reg-mode-desc">Chọn "Nhân viên mới" để đăng ký người chưa có trong hệ thống, hoặc "Bổ sung mẫu" để chụp thêm ảnh khuôn mặt cho nhân viên đã có (ví dụ khi đổi kiểu tóc, đeo kính).</div>
     </div>
 
     <div class="card hidden" id="reg-form-card">
       <label>Mã nhân viên</label>
       <input type="text" id="reg-manv" placeholder="VD: NV001">
-      <label>Họ và tên</label>
-      <input type="text" id="reg-hoten" placeholder="VD: Nguyễn Văn A">
+      <div id="reg-hoten-wrap">
+        <label>Họ và tên</label>
+        <input type="text" id="reg-hoten" placeholder="VD: Nguyễn Văn A">
+      </div>
 
       <div class="video-wrap" style="margin-top:12px;">
         <video id="reg-video" autoplay muted playsinline></video>
         <canvas id="reg-overlay"></canvas>
       </div>
       <button id="reg-start">Bật camera</button>
-      <button id="reg-capture" class="hidden">Chụp mẫu khuôn mặt (3 lần)</button>
+      <button id="reg-capture" class="hidden">Chụp mẫu khuôn mặt</button>
       <div id="reg-status" class="status hidden"></div>
-      <button id="reg-save" class="success hidden">Lưu nhân viên</button>
+      <button id="reg-save" class="success hidden">Lưu</button>
+
+      <div class="note-box">
+        Lưu ý: hệ thống hiện <strong>chưa chống được việc chấm công hộ bằng ảnh/video giả mạo</strong> ở mức tuyệt đối.
+        Quản lý nên thỉnh thoảng đối chiếu ngẫu nhiên camera an ninh tại kho với log chấm công để phát hiện gian lận.
+      </div>
     </div>
   </div>
 
@@ -132,42 +184,93 @@
 const CONFIG = {
   // URL Web App sau khi deploy Google Apps Script (xem HUONG_DAN.md)
   WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbw9XM7_0AZl0zWAaNB5o1prS8mlQUPEuyT89kgn-Amvp960J225NCPfkt2mjO0mpbX7/exec',
-  // Phải khớp với APP_TOKEN trong Code.gs
-  APP_TOKEN: 'Idsids@@',
-  // PIN để mở tab "Đăng ký nhân viên" (chỉ quản lý biết)
-  ADMIN_PIN: '1997',
-  // Ngưỡng khoảng cách khuôn mặt để coi là "đúng người" (càng nhỏ càng chặt), mặc định face-api ~0.6
-  FACE_MATCH_THRESHOLD: 0.55,
-  // Các địa điểm được phép chấm công: {ten, lat, lng, banKinh (mét)}
-  DIA_DIEM: [
-    { ten: 'Kho/Bãi xe CT', lat: 10.883420, lng: 106.655232, banKinh: 200 }
-    // Thêm địa điểm khác nếu có nhiều kho, ví dụ:
-    // { ten: 'Kho/Bãi xe IDS', lat: 10.881928, lng: 106.655011, banKinh: 200 }
-  ]
+  // Phải khớp với APP_TOKEN trong Script Properties của Code.gs.
+  // GHI CHÚ BẢO MẬT: đây là code chạy trong trình duyệt, ai mở DevTools cũng đọc
+  // được giá trị này - KHÔNG có cách nào giấu tuyệt đối một secret ở phía client.
+  // Token chỉ có tác dụng chặn truy cập ngẫu nhiên; toàn bộ quyết định quan trọng
+  // (đúng nhân viên, đúng vị trí, đúng PIN, chống trùng lặp...) đều được Code.gs
+  // tự kiểm tra lại ở server, không tin dữ liệu client tự khai.
+  APP_TOKEN: 'Idsids@@'
 };
 /* ======================================================================= */
 
 let modelsReady = false;
 let employees = []; // {maNV, hoTen, descriptor: Float32Array}
+let SITES = [];      // lấy động từ server qua action=listSites
+let FACE_MATCH_THRESHOLD = 0.55; // giá trị mặc định, sẽ được ghi đè từ CauHinh trên server
+
+/* ============================= MÀN HÌNH TẢI ============================= */
+const loadingFill = document.getElementById('loading-fill');
+const loadingText = document.getElementById('loading-text');
+const loadingErr = document.getElementById('loading-err');
+const loadingRetry = document.getElementById('loading-retry');
+
+function capNhatTienDo(percent, text) {
+  loadingFill.style.width = percent + '%';
+  loadingText.textContent = text;
+}
+
+function hienThiLoiTai(msg) {
+  loadingErr.textContent = msg;
+  loadingErr.classList.remove('hidden');
+  loadingRetry.classList.remove('hidden');
+}
+
+loadingRetry.addEventListener('click', () => location.reload());
+
+async function dangKyServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try { await navigator.serviceWorker.register('sw.js'); } catch (e) { /* không chặn app nếu SW lỗi */ }
+}
 
 async function loadModels() {
   const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+  capNhatTienDo(20, 'Đang tải mô hình phát hiện khuôn mặt...');
   await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+  capNhatTienDo(45, 'Đang tải mô hình định vị các điểm trên khuôn mặt...');
   await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+  capNhatTienDo(70, 'Đang tải mô hình nhận diện khuôn mặt...');
   await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
   modelsReady = true;
 }
 
-async function fetchEmployees() {
-  const res = await fetch(CONFIG.WEB_APP_URL + '?action=listEmployees');
+async function fetchSites() {
+  const res = await fetch(CONFIG.WEB_APP_URL + '?action=listSites&token=' + encodeURIComponent(CONFIG.APP_TOKEN));
   const data = await res.json();
-  if (data.ok) {
-    employees = data.employees.map(e => ({
-      maNV: e.maNV, hoTen: e.hoTen, descriptor: new Float32Array(e.descriptor)
-    }));
-  }
+  if (!data.ok) throw new Error(data.error || 'Không lấy được danh sách địa điểm.');
+  SITES = data.sites || [];
+  if (data.nguongNhanDien) FACE_MATCH_THRESHOLD = Number(data.nguongNhanDien);
 }
 
+async function fetchEmployees() {
+  const res = await fetch(CONFIG.WEB_APP_URL + '?action=listEmployees&token=' + encodeURIComponent(CONFIG.APP_TOKEN));
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'Không lấy được danh sách nhân viên.');
+  employees = data.employees.map(e => ({
+    maNV: e.maNV, hoTen: e.hoTen, descriptor: new Float32Array(e.descriptor)
+  }));
+}
+
+async function khoiDongApp() {
+  loadingErr.classList.add('hidden');
+  loadingRetry.classList.add('hidden');
+  try {
+    capNhatTienDo(5, 'Đang khởi động...');
+    await dangKyServiceWorker();
+    await loadModels();
+    capNhatTienDo(85, 'Đang tải danh sách địa điểm & cấu hình...');
+    await fetchSites();
+    capNhatTienDo(95, 'Đang tải danh sách nhân viên...');
+    await fetchEmployees();
+    capNhatTienDo(100, 'Hoàn tất!');
+    setTimeout(() => document.getElementById('loading-overlay').classList.add('hidden'), 250);
+  } catch (e) {
+    hienThiLoiTai('Không thể tải ứng dụng: ' + e.message + '. Hãy kiểm tra kết nối mạng rồi thử lại.');
+  }
+}
+khoiDongApp();
+
+/* ---------------- Hàm dùng chung ---------------- */
 function haversine(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = d => d * Math.PI / 180;
@@ -180,7 +283,7 @@ function haversine(lat1, lng1, lat2, lng2) {
 
 function nearestSite(lat, lng) {
   let best = null;
-  for (const site of CONFIG.DIA_DIEM) {
+  for (const site of SITES) {
     const d = haversine(lat, lng, site.lat, site.lng);
     if (!best || d < best.khoangCach) best = { ...site, khoangCach: d };
   }
@@ -203,6 +306,49 @@ document.querySelectorAll('.tab').forEach(t => {
   });
 });
 
+/* ================= KIỂM TRA "LIVENESS" (chống ảnh/video tĩnh) =================
+   Quay video ngắn ~1.6 giây, theo dõi vị trí mũi (chống ảnh tĩnh bằng cách phát
+   hiện đầu xoay nhẹ) và tỉ lệ mở mắt EAR (chống ảnh tĩnh bằng cách phát hiện
+   chớp mắt). Nếu không phát hiện chuyển động nào trong cả 2 tiêu chí, coi như
+   chưa xác nhận được là người thật và yêu cầu thử lại.
+   Đây là kiểm tra liveness Ở MỨC CƠ BẢN, không chống được video giả mạo quay
+   sẵn cảnh chớp mắt/quay đầu - xem ghi chú cảnh báo trong giao diện đăng ký. */
+function tinhEAR(eyePoints) {
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const A = dist(eyePoints[1], eyePoints[5]);
+  const B = dist(eyePoints[2], eyePoints[4]);
+  const C = dist(eyePoints[0], eyePoints[3]);
+  return (A + B) / (2 * C);
+}
+
+async function kiemTraLiveness(videoEl, soKhungHinh = 8, khoangCachMs = 180) {
+  const mau = [];
+  for (let i = 0; i < soKhungHinh; i++) {
+    const dt = await faceapi.detectSingleFace(videoEl, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+    if (dt) {
+      const box = dt.detection.box;
+      const mui = dt.landmarks.getNose();
+      const muiTB = { x: mui.reduce((s, p) => s + p.x, 0) / mui.length, y: mui.reduce((s, p) => s + p.y, 0) / mui.length };
+      const earTrai = tinhEAR(dt.landmarks.getLeftEye());
+      const earPhai = tinhEAR(dt.landmarks.getRightEye());
+      mau.push({ muiX: muiTB.x / box.width, muiY: muiTB.y / box.width, ear: (earTrai + earPhai) / 2 });
+    }
+    await new Promise(r => setTimeout(r, khoangCachMs));
+  }
+  if (mau.length < Math.ceil(soKhungHinh / 2)) {
+    return { hopLe: false, lyDo: 'Không giữ được khuôn mặt ổn định trong khung hình.' };
+  }
+  const muiXs = mau.map(m => m.muiX), muiYs = mau.map(m => m.muiY), ears = mau.map(m => m.ear);
+  const bienDoMui = Math.hypot(Math.max(...muiXs) - Math.min(...muiXs), Math.max(...muiYs) - Math.min(...muiYs));
+  const bienDoEar = Math.max(...ears) - Math.min(...ears);
+  const coQuayDau = bienDoMui > 0.02;   // mũi di chuyển > 2% chiều rộng khuôn mặt
+  const coChopMat = bienDoEar > 0.045;  // EAR thay đổi rõ rệt do chớp mắt
+  if (!coQuayDau && !coChopMat) {
+    return { hopLe: false, lyDo: 'Chưa phát hiện chớp mắt hoặc quay đầu. Vui lòng thử lại và di chuyển nhẹ.' };
+  }
+  return { hopLe: true };
+}
+
 /* ================= CHẤM CÔNG ================= */
 const ciVideo = document.getElementById('ci-video');
 const ciOverlay = document.getElementById('ci-overlay');
@@ -210,11 +356,10 @@ const ciStatus = document.getElementById('ci-status');
 let ciStream = null;
 let ciMatched = null; // {maNV, hoTen}
 let ciGpsData = null;
+let ciDangXuLy = false;
 
 document.getElementById('ci-start').addEventListener('click', async () => {
-  setStatus(ciStatus, 'info', 'Đang tải mô hình nhận diện...');
-  if (!modelsReady) await loadModels();
-  await fetchEmployees();
+  setStatus(ciStatus, 'info', 'Đang bật camera...');
   ciStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
   ciVideo.srcObject = ciStream;
   document.getElementById('ci-start').classList.add('hidden');
@@ -223,53 +368,73 @@ document.getElementById('ci-start').addEventListener('click', async () => {
 });
 
 document.getElementById('ci-capture').addEventListener('click', async () => {
-  setStatus(ciStatus, 'info', 'Đang phân tích khuôn mặt...');
-  const detection = await faceapi.detectSingleFace(ciVideo, new faceapi.TinyFaceDetectorOptions())
-    .withFaceLandmarks().withFaceDescriptor();
-  if (!detection) {
-    setStatus(ciStatus, 'err', 'Không phát hiện khuôn mặt. Vui lòng thử lại, đảm bảo đủ sáng.');
-    return;
-  }
-  if (employees.length === 0) {
-    setStatus(ciStatus, 'err', 'Chưa có nhân viên nào được đăng ký trong hệ thống.');
-    return;
-  }
-  let best = null;
-  for (const emp of employees) {
-    const dist = faceapi.euclideanDistance(detection.descriptor, emp.descriptor);
-    if (!best || dist < best.dist) best = { emp, dist };
-  }
-  if (best.dist > CONFIG.FACE_MATCH_THRESHOLD) {
-    setStatus(ciStatus, 'err', 'Không nhận diện được nhân viên phù hợp. Vui lòng thử lại hoặc liên hệ quản lý.');
-    return;
-  }
-  ciMatched = best.emp;
-  const conf = Math.max(0, Math.round((1 - best.dist / CONFIG.FACE_MATCH_THRESHOLD) * 100));
-  document.getElementById('ci-name').textContent = ciMatched.hoTen + ' (' + ciMatched.maNV + ')';
-  document.getElementById('ci-conf').textContent = 'Độ tin cậy ước tính: ' + conf + '%';
-  document.getElementById('ci-match').classList.remove('hidden');
-  ciStatus.classList.add('hidden');
-
-  const gpsStatus = document.getElementById('ci-gps');
-  setStatus(gpsStatus, 'info', 'Đang lấy vị trí GPS...');
-  navigator.geolocation.getCurrentPosition(pos => {
-    const { latitude, longitude } = pos.coords;
-    const site = nearestSite(latitude, longitude);
-    ciGpsData = { lat: latitude, lng: longitude, site };
-    const inZone = site.khoangCach <= site.banKinh;
-    if (inZone) {
-      setStatus(gpsStatus, 'ok', 'Vị trí hợp lệ - cách "' + site.ten + '" khoảng ' + Math.round(site.khoangCach) + 'm.');
-      document.getElementById('ci-in').disabled = false;
-      document.getElementById('ci-out').disabled = false;
-    } else {
-      setStatus(gpsStatus, 'warn', 'Bạn đang cách "' + site.ten + '" khoảng ' + Math.round(site.khoangCach) +
-        'm, vượt quá bán kính cho phép (' + site.banKinh + 'm). Không thể chấm công tại đây.');
-      document.getElementById('ci-in').disabled = true;
-      document.getElementById('ci-out').disabled = true;
+  if (ciDangXuLy) return;
+  ciDangXuLy = true;
+  const btnCapture = document.getElementById('ci-capture');
+  btnCapture.disabled = true;
+  try {
+    setStatus(ciStatus, 'info', 'Đang quét... giữ yên mặt trong khung, chớp mắt hoặc quay đầu nhẹ.');
+    const live = await kiemTraLiveness(ciVideo);
+    if (!live.hopLe) {
+      setStatus(ciStatus, 'warn', live.lyDo);
+      return;
     }
-  }, err => {
-    setStatus(gpsStatus, 'err', 'Không lấy được vị trí GPS: ' + err.message + '. Hãy bật định vị và cho phép trình duyệt truy cập.');
-  }, { enableHighAccuracy: true, timeout: 15000 });
+
+    setStatus(ciStatus, 'info', 'Đang phân tích khuôn mặt...');
+    const detection = await faceapi.detectSingleFace(ciVideo, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks().withFaceDescriptor();
+    if (!detection) {
+      setStatus(ciStatus, 'err', 'Không phát hiện khuôn mặt. Vui lòng thử lại, đảm bảo đủ sáng.');
+      return;
+    }
+    if (employees.length === 0) {
+      setStatus(ciStatus, 'err', 'Chưa có nhân viên nào được đăng ký trong hệ thống.');
+      return;
+    }
+    let best = null;
+    for (const emp of employees) {
+      const dist = faceapi.euclideanDistance(detection.descriptor, emp.descriptor);
+      if (!best || dist < best.dist) best = { emp, dist };
+    }
+    if (best.dist > FACE_MATCH_THRESHOLD) {
+      setStatus(ciStatus, 'err', 'Không nhận diện được nhân viên phù hợp. Vui lòng thử lại hoặc liên hệ quản lý.');
+      return;
+    }
+    ciMatched = best.emp;
+    const conf = Math.max(0, Math.round((1 - best.dist / FACE_MATCH_THRESHOLD) * 100));
+    document.getElementById('ci-name').textContent = ciMatched.hoTen + ' (' + ciMatched.maNV + ')';
+    document.getElementById('ci-conf').textContent = 'Độ tin cậy ước tính: ' + conf + '%';
+    document.getElementById('ci-match').classList.remove('hidden');
+    ciStatus.classList.add('hidden');
+
+    const gpsStatus = document.getElementById('ci-gps');
+    setStatus(gpsStatus, 'info', 'Đang lấy vị trí GPS...');
+    navigator.geolocation.getCurrentPosition(pos => {
+      const { latitude, longitude } = pos.coords;
+      const site = nearestSite(latitude, longitude);
+      ciGpsData = { lat: latitude, lng: longitude, site };
+      if (!site) {
+        setStatus(gpsStatus, 'err', 'Hệ thống chưa cấu hình địa điểm chấm công.');
+        return;
+      }
+      const inZone = site.khoangCach <= site.banKinh;
+      if (inZone) {
+        setStatus(gpsStatus, 'ok', 'Vị trí hợp lệ - cách "' + site.ten + '" khoảng ' + Math.round(site.khoangCach) + 'm.');
+        document.getElementById('ci-in').disabled = false;
+        document.getElementById('ci-out').disabled = false;
+      } else {
+        setStatus(gpsStatus, 'warn', 'Bạn đang cách "' + site.ten + '" khoảng ' + Math.round(site.khoangCach) +
+          'm, vượt quá bán kính cho phép (' + site.banKinh + 'm). Không thể chấm công tại đây.');
+        document.getElementById('ci-in').disabled = true;
+        document.getElementById('ci-out').disabled = true;
+      }
+    }, err => {
+      setStatus(gpsStatus, 'err', 'Không lấy được vị trí GPS: ' + err.message + '. Hãy bật định vị và cho phép trình duyệt truy cập.');
+    }, { enableHighAccuracy: true, timeout: 15000 });
+  } finally {
+    btnCapture.disabled = false;
+    ciDangXuLy = false;
+  }
 });
 
 document.getElementById('ci-retry').addEventListener('click', () => {
@@ -295,6 +460,7 @@ async function submitCheckin(loai) {
         loaiChamCong: loai,
         lat: ciGpsData.lat,
         lng: ciGpsData.lng,
+        // Các giá trị dưới đây chỉ để đối chiếu/ghi log - server tự tính lại, không tin theo client.
         khoangCach: ciGpsData.site.khoangCach,
         trongVung: ciGpsData.site.khoangCach <= ciGpsData.site.banKinh
       })
@@ -316,50 +482,97 @@ async function submitCheckin(loai) {
 document.getElementById('ci-in').addEventListener('click', () => submitCheckin('Vào'));
 document.getElementById('ci-out').addEventListener('click', () => submitCheckin('Ra'));
 
-/* ================= ĐĂNG KÝ NHÂN VIÊN ================= */
-document.getElementById('reg-unlock').addEventListener('click', () => {
+/* ================= ĐĂNG KÝ / BỔ SUNG MẪU NHÂN VIÊN ================= */
+let regAdminPin = null; // PIN chỉ giữ trong bộ nhớ tạm sau khi server xác thực đúng, không lưu ở đâu khác
+let regMode = 'new'; // 'new' = đăng ký mới (5 mẫu) | 'add' = bổ sung mẫu (2 mẫu) cho NV đã có
+
+document.getElementById('reg-unlock').addEventListener('click', async () => {
+  const pinStatus = document.getElementById('reg-pin-status');
   const pin = document.getElementById('reg-pin').value;
-  if (pin === CONFIG.ADMIN_PIN) {
-    document.getElementById('reg-pin-card').classList.add('hidden');
-    document.getElementById('reg-form-card').classList.remove('hidden');
-  } else {
-    alert('Sai mã PIN.');
+  if (!pin) { alert('Vui lòng nhập mã PIN.'); return; }
+  setStatus(pinStatus, 'info', 'Đang kiểm tra...');
+  try {
+    const res = await fetch(CONFIG.WEB_APP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'verifyPin', pin })
+    });
+    const data = await res.json();
+    if (data.ok && data.valid) {
+      regAdminPin = pin;
+      document.getElementById('reg-pin-card').classList.add('hidden');
+      document.getElementById('reg-mode-card').classList.remove('hidden');
+      chonCheDoDangKy('new');
+    } else if (data.khoa) {
+      setStatus(pinStatus, 'err', data.error || 'Đã khóa tạm thời do nhập sai nhiều lần.');
+    } else {
+      setStatus(pinStatus, 'err', 'Sai mã PIN.');
+    }
+  } catch (e) {
+    setStatus(pinStatus, 'err', 'Không kiểm tra được PIN: ' + e.message);
   }
 });
+
+function chonCheDoDangKy(mode) {
+  regMode = mode;
+  document.getElementById('reg-mode-new').style.background = mode === 'new' ? '#e8f0fe' : '#fff';
+  document.getElementById('reg-mode-add').style.background = mode === 'add' ? '#e8f0fe' : '#fff';
+  document.getElementById('reg-form-card').classList.remove('hidden');
+  document.getElementById('reg-hoten-wrap').classList.toggle('hidden', mode === 'add');
+  document.getElementById('reg-manv').placeholder = mode === 'new' ? 'VD: NV001 (mã mới)' : 'VD: NV001 (mã đã có sẵn)';
+  regDescriptors = [];
+  document.getElementById('reg-save').classList.add('hidden');
+  document.getElementById('reg-capture').disabled = false;
+  regStatus.classList.add('hidden');
+}
+document.getElementById('reg-mode-new').addEventListener('click', () => chonCheDoDangKy('new'));
+document.getElementById('reg-mode-add').addEventListener('click', () => chonCheDoDangKy('add'));
 
 const regVideo = document.getElementById('reg-video');
 const regStatus = document.getElementById('reg-status');
 let regDescriptors = [];
 
+const HUONG_DAN_CHUP = [
+  'Mẫu 1/{n}: Nhìn thẳng vào camera, ánh sáng bình thường.',
+  'Mẫu 2/{n}: Hơi nghiêng mặt sang trái một chút.',
+  'Mẫu 3/{n}: Hơi nghiêng mặt sang phải một chút.',
+  'Mẫu 4/{n}: Nếu tiện, hãy di chuyển ra chỗ sáng hơn (ánh sáng ngoài trời).',
+  'Mẫu 5/{n}: Quay lại chỗ cũ, nhìn thẳng vào camera lần cuối.'
+];
+
 document.getElementById('reg-start').addEventListener('click', async () => {
-  setStatus(regStatus, 'info', 'Đang tải mô hình nhận diện...');
-  if (!modelsReady) await loadModels();
+  setStatus(regStatus, 'info', 'Đang bật camera...');
   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
   regVideo.srcObject = stream;
   document.getElementById('reg-start').classList.add('hidden');
   document.getElementById('reg-capture').classList.remove('hidden');
-  setStatus(regStatus, 'ok', 'Camera đã bật. Nhìn thẳng vào camera ráo bấm "Chụp mẫu khuôn mặt".');
+  setStatus(regStatus, 'ok', 'Camera đã bật. Nhìn thẳng vào camera rồi bấm "Chụp mẫu khuôn mặt".');
 });
 
 document.getElementById('reg-capture').addEventListener('click', async () => {
   const maNV = document.getElementById('reg-manv').value.trim();
   const hoTen = document.getElementById('reg-hoten').value.trim();
-  if (!maNV || !hoTen) {
-    alert('Vui lòng nhập Mã nhân viên và Họ tên trước.');
+  if (!maNV || (regMode === 'new' && !hoTen)) {
+    alert('Vui lòng nhập đầy đủ thông tin trước.');
     return;
   }
-  setStatus(regStatus, 'info', 'Đang chụp mẫu ' + (regDescriptors.length + 1) + '/3...');
+  const soMauCanThiet = regMode === 'new' ? 5 : 2;
+  const huongDan = regMode === 'new'
+    ? (HUONG_DAN_CHUP[regDescriptors.length] || 'Mẫu {n}/{n}: giữ nguyên tư thế.').replace(/\{n\}/g, soMauCanThiet)
+    : 'Mẫu ' + (regDescriptors.length + 1) + '/' + soMauCanThiet + ': nhìn thẳng vào camera.';
+  setStatus(regStatus, 'info', 'Đang chụp... ' + huongDan);
+
   const detection = await faceapi.detectSingleFace(regVideo, new faceapi.TinyFaceDetectorOptions())
     .withFaceLandmarks().withFaceDescriptor();
   if (!detection) {
     setStatus(regStatus, 'err', 'Không phát hiện khuôn mặt, vui lòng thử lại.');
     return;
   }
-  regDescriptors.push(detection.descriptor);
-  if (regDescriptors.length < 3) {
-    setStatus(regStatus, 'ok', 'Đã chụp ' + regDescriptors.length + '/3. Hơi đổi góc mặt một chút rồi bấm chụp tiếp.');
+  regDescriptors.push(Array.from(detection.descriptor));
+  if (regDescriptors.length < soMauCanThiet) {
+    const tiep = (HUONG_DAN_CHUP[regDescriptors.length] || '').replace(/\{n\}/g, soMauCanThiet);
+    setStatus(regStatus, 'ok', 'Đã chụp ' + regDescriptors.length + '/' + soMauCanThiet + '. ' + tiep);
   } else {
-    setStatus(regStatus, 'ok', 'Đã chụp đủ 3 mẫu. Bấm "Lưu nhân viên" để hoàn tất.');
+    setStatus(regStatus, 'ok', 'Đã chụp đủ ' + soMauCanThiet + ' mẫu. Bấm "Lưu" để hoàn tất.');
     document.getElementById('reg-save').classList.remove('hidden');
     document.getElementById('reg-capture').disabled = true;
   }
@@ -368,24 +581,31 @@ document.getElementById('reg-capture').addEventListener('click', async () => {
 document.getElementById('reg-save').addEventListener('click', async () => {
   const maNV = document.getElementById('reg-manv').value.trim();
   const hoTen = document.getElementById('reg-hoten').value.trim();
-  // Trung bình cộng 3 descriptor để tăng độ ổn định
-  const avg = new Array(128).fill(0);
-  regDescriptors.forEach(d => { for (let i = 0; i < 128; i++) avg[i] += d[i] / regDescriptors.length; });
 
   setStatus(regStatus, 'info', 'Đang lưu...');
   try {
-    const res = await fetch(CONFIG.WEB_APP_URL, {
-      method: 'POST',
-      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'register', maNV, hoTen, descriptor: avg })
-    });
+    const body = {
+      token: CONFIG.APP_TOKEN,
+      action: regMode === 'new' ? 'register' : 'addSample',
+      adminPin: regAdminPin,
+      maNV,
+      descriptors: regDescriptors,
+      thietBi: navigator.userAgent
+    };
+    if (regMode === 'new') body.hoTen = hoTen;
+
+    const res = await fetch(CONFIG.WEB_APP_URL, { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
     if (data.ok) {
-      setStatus(regStatus, 'ok', 'Đã lưu nhân viên "' + hoTen + '" thành công!');
+      setStatus(regStatus, 'ok', regMode === 'new'
+        ? 'Đã đăng ký nhân viên "' + hoTen + '" thành công!'
+        : 'Đã bổ sung mẫu khuôn mặt cho mã NV "' + maNV + '" thành công!');
       regDescriptors = [];
       document.getElementById('reg-save').classList.add('hidden');
       document.getElementById('reg-capture').disabled = false;
       document.getElementById('reg-manv').value = '';
       document.getElementById('reg-hoten').value = '';
+      await fetchEmployees(); // cập nhật lại danh sách nhân viên/khuôn mặt ngay để dùng được luôn
     } else {
       setStatus(regStatus, 'err', 'Lỗi: ' + data.error);
     }
