@@ -10,6 +10,7 @@
  *   - addSample       : bổ sung mẫu khuôn mặt cho nhân viên đã có (POST, cần adminPin)
  *   - verifyPin       : xác thực mã PIN quản trị phía server (POST)
  *   - report          : báo cáo tổng hợp giờ công / đi trễ / từ chối (GET)
+ *   - canhBaoKhongKhop: ghi log khi quét mặt không khớp nhân viên nào (POST, chống dò)
  *
  * GIỚI HẠN BẢO MẬT CẦN BIẾT:
  * `APP_TOKEN` nằm trong index.html (chạy ở trình duyệt) nên về nguyên tắc
@@ -62,10 +63,11 @@ function doPost(e) {
     kiemTraToken_(body.token);
 
     switch (body.action) {
-      case 'checkin':    return jsonOut_(xuLyChamCong_(body));
-      case 'register':   return jsonOut_(xuLyDangKy_(body));
-      case 'addSample':  return jsonOut_(xuLyThemMau_(body));
-      case 'verifyPin':  return jsonOut_(xuLyXacThucPin_(body));
+      case 'checkin':          return jsonOut_(xuLyChamCong_(body));
+      case 'register':         return jsonOut_(xuLyDangKy_(body));
+      case 'addSample':        return jsonOut_(xuLyThemMau_(body));
+      case 'verifyPin':        return jsonOut_(xuLyXacThucPin_(body));
+      case 'canhBaoKhongKhop': return jsonOut_(xuLyCanhBaoKhongKhop_(body));
       default:
         return jsonOut_({ ok: false, error: 'Action không hợp lệ: ' + body.action });
     }
@@ -388,24 +390,50 @@ function ghiNhatKyDangKy_(maNV, hoTen, hanhDong, thietBi, ketQua) {
 
 /**
  * Xác thực PIN quản trị hoàn toàn ở server (client không còn biết PIN thật).
- * Có khóa tạm sau nhiều lần sai để chống dò PIN (brute-force).
+ * Có khóa tạm sau nhiều lần sai để chống dò PIN (brute-force): 5 lần sai liên
+ * tiếp sẽ khóa 10 phút (chặt hơn mức 10 lần/5 phút trước đây).
  */
 function xuLyXacThucPin_(body) {
   var cache = CacheService.getScriptCache();
   var khoaDem = 'pin_fail_count';
   var soLanSai = Number(cache.get(khoaDem) || 0);
-  if (soLanSai >= 10) {
-    return { ok: true, valid: false, khoa: true, error: 'Nhập sai PIN quá nhiều lần, vui lòng thử lại sau vài phút.' };
+  if (soLanSai >= 5) {
+    return { ok: true, valid: false, khoa: true, error: 'Nhập sai PIN quá nhiều lần, vui lòng thử lại sau khoảng 10 phút.' };
   }
 
   var expected = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
   var dung = !!expected && String(body.pin) === expected;
   if (!dung) {
-    cache.put(khoaDem, String(soLanSai + 1), 300);
+    cache.put(khoaDem, String(soLanSai + 1), 600);
   } else {
     cache.remove(khoaDem);
   }
   return { ok: true, valid: dung };
+}
+
+/* ============================= CẢNH BÁO NHẬN DIỆN BẤT THƯỜNG ============================= */
+
+/**
+ * Ghi log "mờ" (best-effort) mỗi khi trình duyệt quét được khuôn mặt nhưng KHÔNG khớp
+ * với nhân viên nào trong hệ thống. Không cần PIN (đây chỉ là log bị động, không thay
+ * đổi dữ liệu nghiệp vụ), nhưng có rate-limit toàn cục để tránh bị lợi dụng spam ghi
+ * đầy sheet. Quản lý xem sheet CanhBaoNhanDien để phát hiện dấu hiệu ai đó đang cố dùng
+ * ảnh/khuôn mặt lạ để dò thử hệ thống.
+ */
+function xuLyCanhBaoKhongKhop_(body) {
+  var cache = CacheService.getScriptCache();
+  var khoaGioiHan = 'ratelimit_canhbao_global';
+  if (cache.get(khoaGioiHan)) return { ok: true };
+  cache.put(khoaGioiHan, '1', 5);
+
+  var sh = laySheet_('CanhBaoNhanDien');
+  sh.appendRow([
+    new Date(),
+    body.lyDo || 'Không khớp khuôn mặt nhân viên nào',
+    body.khoangCachToiThieu != null ? Number(body.khoangCachToiThieu) : '',
+    body.thietBi || ''
+  ]);
+  return { ok: true };
 }
 
 /* ============================= BÁO CÁO ============================= */
@@ -493,6 +521,7 @@ function khoiTaoHeThong() {
   taoSheetNeuChua_(ss, 'DiaDiem', ['Ten', 'Lat', 'Lng', 'BanKinh(m)']);
   taoSheetNeuChua_(ss, 'CauHinh', ['Key', 'Value', 'GhiChu']);
   taoSheetNeuChua_(ss, 'NhatKyDangKy', ['ThoiGian', 'MaNV', 'HoTen', 'HanhDong', 'ThietBi', 'KetQua']);
+  taoSheetNeuChua_(ss, 'CanhBaoNhanDien', ['ThoiGian', 'LyDo', 'KhoangCachToiThieu', 'ThietBi']);
 
   var shDiaDiem = ss.getSheetByName('DiaDiem');
   if (shDiaDiem.getLastRow() < 2) {

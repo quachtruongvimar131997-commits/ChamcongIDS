@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Content-Security-Policy: lớp phòng thủ bổ sung - chỉ cho phép script/tài nguyên
+     tải từ chính trang này, CDN face-api.js, và backend Google Apps Script. Giảm
+     rủi ro nếu có script lạ bị chèn vào (XSS) cố tải mã độc từ nơi khác. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; worker-src 'self'; base-uri 'self'; form-action 'self';">
 <title>Chấm công khuôn mặt - IDS</title>
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <style>
@@ -22,6 +26,9 @@
   }
   header h1 { margin: 0; font-size: 20px; }
   header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+  .header-brand { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 480px; margin: 0 auto; }
+  .header-brand div { text-align: left; }
+  .header-logo { height: 44px; width: 44px; object-fit: contain; background: #fff; border-radius: 8px; padding: 3px; flex-shrink: 0; }
   .tabs { display: flex; background: #fff; border-bottom: 1px solid #ddd; }
   .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; font-weight: 600; color: #666; }
   .tab.active { color: var(--primary); border-bottom: 3px solid var(--primary); }
@@ -97,8 +104,13 @@
 </div>
 
 <header>
-  <h1>Chấm công bằng khuôn mặt</h1>
-  <p>IDS - Đội xe giao hàng nội thành</p>
+  <div class="header-brand">
+    <img src="Logo_IDS.jpg" alt="Logo IDS" class="header-logo">
+    <div>
+      <h1>Chấm công bằng khuôn mặt</h1>
+      <p>Công ty CP DV PP Tổng Hợp Quốc Tế (IDS)</p>
+    </div>
+  </div>
 </header>
 
 <div class="tabs">
@@ -117,7 +129,8 @@
       </div>
       <button id="ci-start">Bật camera & bắt đầu</button>
       <button id="ci-capture" class="hidden">Chụp & nhận diện</button>
-      <div class="small" id="ci-hint" style="margin-top:6px;">Khi bấm "Chụp & nhận diện", hãy chớp mắt hoặc quay đầu nhẹ trong lúc quét để xác nhận là người thật.</div>
+      <div class="small" id="ci-hint" style="margin-top:6px;">Khi bấm "Chụp & nhận diện", hệ thống sẽ yêu cầu Sếp làm MỘT động tác ngẫu nhiên (chớp mắt / quay đầu / gật đầu) để xác nhận là người thật, không phải ảnh hay video.</div>
+      <div id="ci-challenge" class="status hidden" style="font-size:16px; font-weight:700; text-align:center;"></div>
       <div id="ci-status" class="status hidden"></div>
     </div>
 
@@ -171,8 +184,10 @@
       <button id="reg-save" class="success hidden">Lưu</button>
 
       <div class="note-box">
-        Lưu ý: hệ thống hiện <strong>chưa chống được việc chấm công hộ bằng ảnh/video giả mạo</strong> ở mức tuyệt đối.
-        Quản lý nên thỉnh thoảng đối chiếu ngẫu nhiên camera an ninh tại kho với log chấm công để phát hiện gian lận.
+        Lưu ý: tab "Chấm công" đã có kiểm tra thử thách ngẫu nhiên (chớp mắt/quay đầu/gật đầu) để chống ảnh tĩnh,
+        nhưng hệ thống <strong>vẫn chưa chống tuyệt đối được video call/deepfake phản ứng trực tiếp</strong>.
+        Quản lý nên thỉnh thoảng đối chiếu ngẫu nhiên camera an ninh tại kho với log chấm công, và xem sheet
+        "CanhBaoNhanDien" để phát hiện các lượt cố tình quét mặt không khớp bất thường.
       </div>
     </div>
   </div>
@@ -306,13 +321,15 @@ document.querySelectorAll('.tab').forEach(t => {
   });
 });
 
-/* ================= KIỂM TRA "LIVENESS" (chống ảnh/video tĩnh) =================
-   Quay video ngắn ~1.6 giây, theo dõi vị trí mũi (chống ảnh tĩnh bằng cách phát
-   hiện đầu xoay nhẹ) và tỉ lệ mở mắt EAR (chống ảnh tĩnh bằng cách phát hiện
-   chớp mắt). Nếu không phát hiện chuyển động nào trong cả 2 tiêu chí, coi như
-   chưa xác nhận được là người thật và yêu cầu thử lại.
-   Đây là kiểm tra liveness Ở MỨC CƠ BẢN, không chống được video giả mạo quay
-   sẵn cảnh chớp mắt/quay đầu - xem ghi chú cảnh báo trong giao diện đăng ký. */
+/* ================= KIỂM TRA "LIVENESS" BẰNG THỬ THÁCH NGẪU NHIÊN =================
+   Mỗi lần chấm công, hệ thống CHỌN NGẪU NHIÊN 1 trong 3 động tác (chớp mắt / quay
+   đầu / gật đầu) và hiển thị yêu cầu NGAY TRƯỚC khi quay. Vì không biết trước sẽ
+   phải làm động tác gì, một tấm ảnh tĩnh hoặc 1 đoạn video quay sẵn (quay cảnh
+   chớp mắt có sẵn chẳng hạn) khó có thể "đoán đúng" và khớp với đúng yêu cầu hiển
+   thị tại thời điểm đó - khó giả mạo hơn nhiều so với việc chỉ yêu cầu "di chuyển
+   bất kỳ". Đây vẫn là kiểm tra liveness Ở MỨC CƠ BẢN (không chống được deepfake
+   video call trực tiếp phản ứng theo yêu cầu) - xem ghi chú cảnh báo trong giao
+   diện đăng ký, quản lý vẫn nên đối chiếu camera an ninh định kỳ. */
 function tinhEAR(eyePoints) {
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const A = dist(eyePoints[1], eyePoints[5]);
@@ -321,7 +338,17 @@ function tinhEAR(eyePoints) {
   return (A + B) / (2 * C);
 }
 
-async function kiemTraLiveness(videoEl, soKhungHinh = 8, khoangCachMs = 180) {
+const THU_THACH_LIVENESS = [
+  { id: 'blink', huongDan: '👁️ Hãy CHỚP MẮT vài lần liên tục' },
+  { id: 'turn', huongDan: '↔️ Hãy QUAY ĐẦU sang một bên rồi quay lại' },
+  { id: 'nod', huongDan: '↕️ Hãy GẬT ĐẦU (cúi xuống rồi ngẩng lên)' }
+];
+
+function chonThuThachNgauNhien() {
+  return THU_THACH_LIVENESS[Math.floor(Math.random() * THU_THACH_LIVENESS.length)];
+}
+
+async function kiemTraLivenessTheoThuThach(videoEl, thuThachId, soKhungHinh = 10, khoangCachMs = 190) {
   const mau = [];
   for (let i = 0; i < soKhungHinh; i++) {
     const dt = await faceapi.detectSingleFace(videoEl, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
@@ -331,22 +358,41 @@ async function kiemTraLiveness(videoEl, soKhungHinh = 8, khoangCachMs = 180) {
       const muiTB = { x: mui.reduce((s, p) => s + p.x, 0) / mui.length, y: mui.reduce((s, p) => s + p.y, 0) / mui.length };
       const earTrai = tinhEAR(dt.landmarks.getLeftEye());
       const earPhai = tinhEAR(dt.landmarks.getRightEye());
-      mau.push({ muiX: muiTB.x / box.width, muiY: muiTB.y / box.width, ear: (earTrai + earPhai) / 2 });
+      mau.push({ muiX: muiTB.x / box.width, muiY: muiTB.y / box.height, ear: (earTrai + earPhai) / 2 });
     }
     await new Promise(r => setTimeout(r, khoangCachMs));
   }
-  if (mau.length < Math.ceil(soKhungHinh / 2)) {
-    return { hopLe: false, lyDo: 'Không giữ được khuôn mặt ổn định trong khung hình.' };
+  if (mau.length < Math.ceil(soKhungHinh * 0.6)) {
+    return { hopLe: false, lyDo: 'Không giữ được khuôn mặt ổn định trong khung hình. Vui lòng thử lại.' };
   }
-  const muiXs = mau.map(m => m.muiX), muiYs = mau.map(m => m.muiY), ears = mau.map(m => m.ear);
-  const bienDoMui = Math.hypot(Math.max(...muiXs) - Math.min(...muiXs), Math.max(...muiYs) - Math.min(...muiYs));
-  const bienDoEar = Math.max(...ears) - Math.min(...ears);
-  const coQuayDau = bienDoMui > 0.02;   // mũi di chuyển > 2% chiều rộng khuôn mặt
-  const coChopMat = bienDoEar > 0.045;  // EAR thay đổi rõ rệt do chớp mắt
-  if (!coQuayDau && !coChopMat) {
-    return { hopLe: false, lyDo: 'Chưa phát hiện chớp mắt hoặc quay đầu. Vui lòng thử lại và di chuyển nhẹ.' };
+
+  if (thuThachId === 'blink') {
+    const ears = mau.map(m => m.ear);
+    const baseline = Math.max(...ears.slice(0, 2));
+    let trangThai = 'mo', soLanChop = 0;
+    ears.forEach(e => {
+      if (trangThai === 'mo' && e < baseline * 0.75) trangThai = 'nham';
+      else if (trangThai === 'nham' && e > baseline * 0.85) { trangThai = 'mo'; soLanChop++; }
+    });
+    if (soLanChop < 1) return { hopLe: false, lyDo: 'Chưa phát hiện chớp mắt. Vui lòng chớp mắt rõ ràng rồi thử lại.' };
+    return { hopLe: true };
   }
-  return { hopLe: true };
+
+  if (thuThachId === 'turn') {
+    const xs = mau.map(m => m.muiX);
+    const bienDo = Math.max(...xs) - Math.min(...xs);
+    if (bienDo < 0.02) return { hopLe: false, lyDo: 'Chưa phát hiện quay đầu. Vui lòng quay đầu sang một bên rõ hơn rồi thử lại.' };
+    return { hopLe: true };
+  }
+
+  if (thuThachId === 'nod') {
+    const ys = mau.map(m => m.muiY);
+    const bienDo = Math.max(...ys) - Math.min(...ys);
+    if (bienDo < 0.02) return { hopLe: false, lyDo: 'Chưa phát hiện gật đầu. Vui lòng cúi xuống - ngẩng lên rõ hơn rồi thử lại.' };
+    return { hopLe: true };
+  }
+
+  return { hopLe: false, lyDo: 'Không xác định được thử thách, vui lòng thử lại.' };
 }
 
 /* ================= CHẤM CÔNG ================= */
@@ -367,18 +413,39 @@ document.getElementById('ci-start').addEventListener('click', async () => {
   setStatus(ciStatus, 'ok', 'Camera đã bật. Đưa mặt vào giữa khung hình rồi bấm "Chụp & nhận diện".');
 });
 
+function baoCanhBaoKhongKhop(lyDo, khoangCachToiThieu) {
+  // Gửi ngầm (không chờ, không chặn UI) để quản lý có dữ liệu phát hiện gian lận -
+  // ví dụ nhiều lần thử không khớp mặt liên tiếp tại 1 thiết bị.
+  fetch(CONFIG.WEB_APP_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      token: CONFIG.APP_TOKEN,
+      action: 'canhBaoKhongKhop',
+      lyDo,
+      khoangCachToiThieu,
+      thietBi: navigator.userAgent
+    })
+  }).catch(() => {});
+}
+
 document.getElementById('ci-capture').addEventListener('click', async () => {
   if (ciDangXuLy) return;
   ciDangXuLy = true;
   const btnCapture = document.getElementById('ci-capture');
+  const challengeEl = document.getElementById('ci-challenge');
   btnCapture.disabled = true;
   try {
-    setStatus(ciStatus, 'info', 'Đang quét... giữ yên mặt trong khung, chớp mắt hoặc quay đầu nhẹ.');
-    const live = await kiemTraLiveness(ciVideo);
+    const thuThach = chonThuThachNgauNhien();
+    setStatus(challengeEl, 'info', thuThach.huongDan);
+    setStatus(ciStatus, 'info', 'Đang chuẩn bị quét...');
+    await new Promise(r => setTimeout(r, 800)); // cho người dùng kịp đọc yêu cầu
+    setStatus(ciStatus, 'info', 'Đang quét... làm đúng động tác được yêu cầu ở trên.');
+    const live = await kiemTraLivenessTheoThuThach(ciVideo, thuThach.id);
     if (!live.hopLe) {
       setStatus(ciStatus, 'warn', live.lyDo);
       return;
     }
+    challengeEl.classList.add('hidden');
 
     setStatus(ciStatus, 'info', 'Đang phân tích khuôn mặt...');
     const detection = await faceapi.detectSingleFace(ciVideo, new faceapi.TinyFaceDetectorOptions())
@@ -398,6 +465,7 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
     }
     if (best.dist > FACE_MATCH_THRESHOLD) {
       setStatus(ciStatus, 'err', 'Không nhận diện được nhân viên phù hợp. Vui lòng thử lại hoặc liên hệ quản lý.');
+      baoCanhBaoKhongKhop('Khong khop khuon mat nhan vien nao luc cham cong', best.dist);
       return;
     }
     ciMatched = best.emp;
@@ -439,6 +507,7 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
 
 document.getElementById('ci-retry').addEventListener('click', () => {
   document.getElementById('ci-match').classList.add('hidden');
+  document.getElementById('ci-challenge').classList.add('hidden');
   ciMatched = null; ciGpsData = null;
   document.getElementById('ci-in').disabled = true;
   document.getElementById('ci-out').disabled = true;
