@@ -57,6 +57,7 @@ function doGet(e) {
     if (action === 'listChamCong') {
       return jsonOut_(layDanhSachChamCong_(e.parameter.tuNgay, e.parameter.denNgay, e.parameter.maNV, e.parameter.limit));
     }
+    if (action === 'kiemTraDrive') return jsonOut_(xuLyKiemTraDrive_());
 
     return jsonOut_({ ok: false, error: 'Action không hợp lệ: ' + action });
   } catch (err) {
@@ -378,6 +379,22 @@ function layHoacTaoThuMuc_(thuMucCha, ten) {
   var it = thuMucCha.getFoldersByName(ten);
   if (it.hasNext()) return it.next();
   return thuMucCha.createFolder(ten);
+}
+
+/**
+ * Hàm CHẨN ĐOÁN tạm thời - kiểm tra xem quyền Drive có hoạt động không, không đụng
+ * tới dữ liệu chấm công thật. Gọi qua WEB_APP_URL?action=kiemTraDrive&token=...
+ */
+function xuLyKiemTraDrive_() {
+  try {
+    var thuMuc = layHoacTaoThuMuc_(DriveApp.getRootFolder(), 'ChamCong_AnhBangChung');
+    var thuMucTest = layHoacTaoThuMuc_(thuMuc, '_test_chan_doan');
+    var blob = Utilities.newBlob('test', 'text/plain', 'test_' + new Date().getTime() + '.txt');
+    var file = thuMucTest.createFile(blob);
+    return { ok: true, ketQua: 'OK - Da tao file thu tai: ' + file.getUrl() };
+  } catch (e) {
+    return { ok: true, ketQua: 'LOI: ' + (e && e.message ? e.message : String(e)) };
+  }
 }
 
 /* ============================= ĐĂNG KÝ NHÂN VIÊN ============================= */

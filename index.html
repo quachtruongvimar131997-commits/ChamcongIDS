@@ -424,7 +424,12 @@ function chupAnhTuVideo(videoEl) {
 
 document.getElementById('ci-start').addEventListener('click', async () => {
   setStatus(ciStatus, 'info', 'Đang bật camera...');
-  ciStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  try {
+    ciStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  } catch (e) {
+    setStatus(ciStatus, 'err', 'Không mở được camera: ' + e.message + '. Hãy vào cài đặt trình duyệt cho phép trang này dùng camera rồi thử lại.');
+    return;
+  }
   ciVideo.srcObject = ciStream;
   document.getElementById('ci-start').classList.add('hidden');
   document.getElementById('ci-capture').classList.remove('hidden');
@@ -640,7 +645,13 @@ const HUONG_DAN_CHUP = [
 
 document.getElementById('reg-start').addEventListener('click', async () => {
   setStatus(regStatus, 'info', 'Đang bật camera...');
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  } catch (e) {
+    setStatus(regStatus, 'err', 'Không mở được camera: ' + e.message + '. Hãy vào cài đặt trình duyệt cho phép trang này dùng camera rồi thử lại.');
+    return;
+  }
   regVideo.srcObject = stream;
   document.getElementById('reg-start').classList.add('hidden');
   document.getElementById('reg-capture').classList.remove('hidden');
