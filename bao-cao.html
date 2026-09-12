@@ -66,13 +66,13 @@
     box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
   }
   label { display: block; font-size: 12.5px; color: var(--text-dim); margin: 12px 0 6px; letter-spacing: .2px; }
-  input[type=text], input[type=password], input[type=date] {
+  input[type=text], input[type=password], input[type=date], select {
     width: 100%; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
     font-size: 15px; background: rgba(255,255,255,.04); color: var(--text);
     color-scheme: dark;
   }
   input::placeholder { color: rgba(255,255,255,.32); }
-  input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
+  input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
   button {
     padding: 14px; border: none; border-radius: var(--radius-sm); font-size: 15px;
     font-weight: 600; margin-top: 10px; cursor: pointer; color: #fff; background: var(--primary-grad);
@@ -81,6 +81,7 @@
   button:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(59,130,246,.45); }
   button:active { transform: translateY(0) scale(.98); }
   button.full { width: 100%; }
+  button.secondary { background: rgba(255,255,255,.08); box-shadow: none; border: 1px solid var(--border-strong); }
   .status { padding: 11px 14px; border-radius: var(--radius-sm); font-size: 13.5px; margin-top: 10px; border: 1px solid transparent; }
   .status.info { background: rgba(59,130,246,.12); color: #93c5fd; border-color: rgba(59,130,246,.3); }
   .status.ok { background: rgba(31,216,164,.12); color: #6ee7c2; border-color: rgba(31,216,164,.3); }
@@ -135,6 +136,8 @@
 <div class="container">
 
   <div class="card" id="pin-card">
+    <label>Tên quản lý</label>
+    <input type="text" id="ten-quanly-input" placeholder="VD: Sếp Vĩ">
     <label>Mã PIN quản trị</label>
     <input type="password" id="pin-input" placeholder="Nhập mã PIN để xem báo cáo">
     <button class="full" id="pin-unlock">Mở khóa</button>
@@ -159,10 +162,35 @@
       <div id="report-status" class="status hidden"></div>
     </div>
 
+    <div class="card">
+      <h3 style="margin-top:0;">Chấm công thủ công</h3>
+      <div class="small">Dùng khi nhận diện khuôn mặt thất bại (camera hỏng, thiết bị lỗi...). Bắt buộc ghi rõ lý do để lưu vết.</div>
+      <div class="row">
+        <div>
+          <label>Mã nhân viên</label>
+          <input type="text" id="tc-manv" placeholder="VD: NV001">
+        </div>
+        <div>
+          <label>Loại</label>
+          <select id="tc-loai">
+            <option value="Vào">Vào</option>
+            <option value="Ra">Ra</option>
+          </select>
+        </div>
+      </div>
+      <label>Lý do (bắt buộc)</label>
+      <input type="text" id="tc-lydo" placeholder="VD: Camera hỏng, quản lý xác nhận trực tiếp">
+      <button class="full" id="tc-ghinhan">Ghi nhận chấm công thủ công</button>
+      <div id="tc-status" class="status hidden"></div>
+    </div>
+
     <div class="cards-grid" id="cards-grid"></div>
 
     <div class="card">
-      <h3 style="margin-top:0;">Tổng hợp theo nhân viên</h3>
+      <div class="row" style="align-items:center;">
+        <h3 style="margin:0;">Tổng hợp theo nhân viên</h3>
+        <button id="xuat-csv-tonghop" class="secondary" style="margin-top:0; flex:0 0 auto; padding:9px 14px; font-size:13px;">⬇ Xuất CSV</button>
+      </div>
       <div class="table-wrap">
         <table id="table-tonghop">
           <thead><tr><th>Mã NV</th><th>Họ tên</th><th>Giờ công</th><th>Đi trễ</th><th>Từ chối</th></tr></thead>
@@ -172,10 +200,13 @@
     </div>
 
     <div class="card">
-      <h3 style="margin-top:0;">Nhật ký chấm công chi tiết (mới nhất trước, tối đa 300 dòng)</h3>
+      <div class="row" style="align-items:center;">
+        <h3 style="margin:0;">Nhật ký chấm công chi tiết (mới nhất trước, tối đa 300 dòng)</h3>
+        <button id="xuat-csv-chitiet" class="secondary" style="margin-top:0; flex:0 0 auto; padding:9px 14px; font-size:13px;">⬇ Xuất CSV</button>
+      </div>
       <div class="table-wrap">
         <table id="table-chitiet">
-          <thead><tr><th>Thời gian</th><th>Mã NV</th><th>Họ tên</th><th>Loại</th><th>Địa điểm</th><th>Kết quả</th><th>Lý do</th><th>Ảnh</th><th>GPS</th></tr></thead>
+          <thead><tr><th>Thời gian</th><th>Mã NV</th><th>Họ tên</th><th>Loại</th><th>Xác thực</th><th>Địa điểm</th><th>Kết quả</th><th>Lý do</th><th>Ảnh</th><th>GPS</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -186,20 +217,23 @@
 
 <script>
 let adminPin = null;
+let tenQuanLy = null;
 
 document.getElementById('pin-unlock').addEventListener('click', async () => {
   const pinStatus = document.getElementById('pin-status');
+  const ten = document.getElementById('ten-quanly-input').value.trim();
   const pin = document.getElementById('pin-input').value;
-  if (!pin) { alert('Vui lòng nhập mã PIN.'); return; }
+  if (!ten || !pin) { alert('Vui lòng nhập tên quản lý và mã PIN.'); return; }
   setStatus(pinStatus, 'info', 'Đang kiểm tra...');
   try {
     const res = await fetch(CONFIG.WEB_APP_URL, {
       method: 'POST',
-      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'verifyPin', pin })
+      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'verifyPin', tenQuanLy: ten, pin })
     });
     const data = await res.json();
     if (data.ok && data.valid) {
       adminPin = pin;
+      tenQuanLy = ten;
       document.getElementById('pin-card').classList.add('hidden');
       document.getElementById('report-area').classList.remove('hidden');
       datMacDinhKhoangNgay();
@@ -207,10 +241,39 @@ document.getElementById('pin-unlock').addEventListener('click', async () => {
     } else if (data.khoa) {
       setStatus(pinStatus, 'err', data.error || 'Đã khóa tạm thời do nhập sai nhiều lần.');
     } else {
-      setStatus(pinStatus, 'err', 'Sai mã PIN.');
+      setStatus(pinStatus, 'err', data.error || 'Sai tên quản lý hoặc mã PIN.');
     }
   } catch (e) {
     setStatus(pinStatus, 'err', 'Không kiểm tra được PIN: ' + e.message);
+  }
+});
+
+document.getElementById('tc-ghinhan').addEventListener('click', async () => {
+  const tcStatus = document.getElementById('tc-status');
+  const maNV = document.getElementById('tc-manv').value.trim();
+  const loaiChamCong = document.getElementById('tc-loai').value;
+  const lyDo = document.getElementById('tc-lydo').value.trim();
+  if (!maNV || !lyDo) {
+    setStatus(tcStatus, 'err', 'Vui lòng nhập mã nhân viên và lý do.');
+    return;
+  }
+  setStatus(tcStatus, 'info', 'Đang ghi nhận...');
+  try {
+    const res = await fetch(CONFIG.WEB_APP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'checkinThuCong', tenQuanLy, adminPin, maNV, loaiChamCong, lyDo })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setStatus(tcStatus, 'ok', 'Đã ghi nhận chấm công thủ công cho "' + data.hoTen + '".');
+      document.getElementById('tc-manv').value = '';
+      document.getElementById('tc-lydo').value = '';
+      xemBaoCao();
+    } else {
+      setStatus(tcStatus, 'err', 'Lỗi: ' + data.error);
+    }
+  } catch (e) {
+    setStatus(tcStatus, 'err', 'Không gửi được dữ liệu: ' + e.message);
   }
 });
 
@@ -257,6 +320,9 @@ async function xemBaoCao() {
     let tongHop = baoCao.tongHop || [];
     if (maNVLoc) tongHop = tongHop.filter(x => x.maNV === maNVLoc);
 
+    duLieuTongHopHienTai = tongHop;
+    duLieuChiTietHienTai = chiTiet.banGhi || [];
+
     veTheThongKe(tongHop, chiTiet.banGhi || []);
     veBangTongHop(tongHop);
     veBangChiTiet(chiTiet.banGhi || []);
@@ -300,12 +366,15 @@ function veBangTongHop(tongHop) {
 function veBangChiTiet(banGhi) {
   const tbody = document.querySelector('#table-chitiet tbody');
   tbody.innerHTML = banGhi.length === 0
-    ? '<tr><td colspan="9" class="small">Không có dữ liệu trong khoảng ngày này.</td></tr>'
+    ? '<tr><td colspan="10" class="small">Không có dữ liệu trong khoảng ngày này.</td></tr>'
     : banGhi.map(r => {
         const thoiGian = new Date(r.thoiGian).toLocaleString('vi-VN');
         const ketQuaBadge = r.ketQua === 'Thành công'
           ? '<span class="badge ok">Thành công</span>'
           : '<span class="badge err">Từ chối</span>';
+        const xacThuc = r.loaiXacThuc === 'ThủCông'
+          ? '<span class="badge warn" title="Người xử lý: ' + escAttr(r.nguoiXuLyThuCong) + '">Thủ công</span>'
+          : '<span class="small">Khuôn mặt</span>';
         const anh = r.anhBangChung
           ? '<a class="anh-link" href="' + escAttr(r.anhBangChung) + '" target="_blank" rel="noopener">Xem ảnh</a>'
           : '<span class="small">-</span>';
@@ -313,7 +382,7 @@ function veBangChiTiet(banGhi) {
           ? '<span class="badge warn" title="' + escAttr(r.lyDoNghiNgoGps) + '">Nghi ngờ</span>'
           : '<span class="small">-</span>';
         return '<tr><td>' + thoiGian + '</td><td>' + escHtml(r.maNV) + '</td><td>' + escHtml(r.hoTen) + '</td>' +
-          '<td>' + escHtml(r.loaiChamCong) + '</td><td>' + escHtml(r.diaDiem) + '</td><td>' + ketQuaBadge + '</td>' +
+          '<td>' + escHtml(r.loaiChamCong) + '</td><td>' + xacThuc + '</td><td>' + escHtml(r.diaDiem) + '</td><td>' + ketQuaBadge + '</td>' +
           '<td>' + escHtml(r.lyDoTuChoi) + '</td><td>' + anh + '</td><td>' + gps + '</td></tr>';
       }).join('');
 }
@@ -322,6 +391,44 @@ function escHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function escAttr(s) { return escHtml(s); }
+
+/* ================= XUẤT CSV (cho HR làm lương) ================= */
+let duLieuTongHopHienTai = [];
+let duLieuChiTietHienTai = [];
+
+function taiCsv(tenFile, hangCsv) {
+  const noiDung = hangCsv.map(hang => hang.map(oCsv).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + noiDung], { type: 'text/csv;charset=utf-8;' }); // ﻿ = BOM để Excel hiển thị đúng dấu tiếng Việt
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = tenFile;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function oCsv(gia) {
+  const s = String(gia == null ? '' : gia);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+document.getElementById('xuat-csv-tonghop').addEventListener('click', () => {
+  const hang = [['Mã NV', 'Họ tên', 'Tổng giờ công', 'Số lần đi trễ', 'Số lần từ chối']];
+  duLieuTongHopHienTai.forEach(x => hang.push([x.maNV, x.hoTen, x.tongGioCong, x.soLanDiTre, x.soLanTuChoi]));
+  taiCsv('tong-hop-cham-cong.csv', hang);
+});
+
+document.getElementById('xuat-csv-chitiet').addEventListener('click', () => {
+  const hang = [['Thời gian', 'Mã NV', 'Họ tên', 'Loại', 'Xác thực', 'Người xử lý thủ công', 'Địa điểm', 'Kết quả', 'Lý do', 'Nghi ngờ GPS', 'Lý do nghi ngờ GPS']];
+  duLieuChiTietHienTai.forEach(r => hang.push([
+    new Date(r.thoiGian).toLocaleString('vi-VN'), r.maNV, r.hoTen, r.loaiChamCong,
+    r.loaiXacThuc === 'ThủCông' ? 'Thủ công' : 'Khuôn mặt', r.nguoiXuLyThuCong || '',
+    r.diaDiem, r.ketQua, r.lyDoTuChoi || '', r.coNghiNgoGps ? 'Có' : '', r.lyDoNghiNgoGps || ''
+  ]));
+  taiCsv('chi-tiet-cham-cong.csv', hang);
+});
 </script>
 </body>
 </html>

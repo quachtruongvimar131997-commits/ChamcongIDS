@@ -14,9 +14,11 @@
 4. Bấm **Save** (biểu tượng đĩa mềm).
 5. Ở thanh trên cùng, chọn hàm **`khoiTaoHeThong`** trong danh sách hàm (dropdown cạnh nút Run/Debug), rồi bấm **Run**.
    - Lần đầu chạy, Google sẽ hỏi cấp quyền — chọn tài khoản của Sếp, bấm **Advanced → Go to (tên project) (unsafe)** → **Allow**. Đây là quyền cho chính script của Sếp truy cập Sheet của Sếp, hoàn toàn bình thường.
-   - Sau khi chạy xong, quay lại Google Sheet sẽ thấy tự động có 7 sheet mới: `NhanVien`, `MauKhuonMat`, `ChamCong`, `DiaDiem`, `CauHinh`, `NhatKyDangKy`, `CanhBaoNhanDien`.
+   - Sau khi chạy xong, quay lại Google Sheet sẽ thấy tự động có 9 sheet mới: `NhanVien`, `MauKhuonMat`, `ChamCong`, `DiaDiem`, `CauHinh`, `NhatKyDangKy`, `CanhBaoNhanDien`, `TaiKhoanQuanLy`, `NhatKyQuanTri`.
 
-> **Nếu Sếp đã triển khai từ trước và giờ chỉ cập nhật `Code.gs` mới** (bản có thêm ảnh bằng chứng + chống giả mạo GPS + dashboard): dán đè `Code.gs` mới vào Apps Script Editor như cũ, **Save**, chạy lại `khoiTaoHeThong` một lần nữa (an toàn, không xoá dữ liệu cũ - hàm chỉ tự thêm các cột/sheet còn thiếu vào CUỐI, ví dụ 3 cột mới `AnhBangChung`, `CoNghiNgoGPS`, `LyDoNghiNgoGPS` trong sheet `ChamCong`), rồi vào **Deploy → Manage deployments → biểu tượng bút chì → Version: New version → Deploy** để bản Code.gs mới có hiệu lực (Script Properties như APP_TOKEN/ADMIN_PIN giữ nguyên, không cần đổi lại).
+> **Nếu Sếp đã triển khai từ trước và giờ chỉ cập nhật `Code.gs` mới** (bản có thêm tài khoản quản lý riêng từng người, cam kết đồng ý dữ liệu khuôn mặt, chấm công thủ công, nhật ký quản trị): dán đè `Code.gs` mới vào Apps Script Editor như cũ, **Save**, chạy lại `khoiTaoHeThong` một lần nữa (an toàn, không xoá dữ liệu cũ - hàm chỉ tự thêm các cột/sheet còn thiếu vào CUỐI, gồm 2 sheet mới `TaiKhoanQuanLy`/`NhatKyQuanTri` + cột mới `DongYSinhTrac`/`NgayDongY` trong `NhanVien` và `LoaiXacThuc`/`NguoiXuLyThuCong` trong `ChamCong`), rồi vào **Deploy → Manage deployments → biểu tượng bút chì → Version: New version → Deploy** để bản Code.gs mới có hiệu lực.
+>
+> **Quan trọng - đổi mô hình PIN:** bản này thay 1 mã `ADMIN_PIN` dùng chung bằng **tài khoản quản lý riêng từng người** trong sheet `TaiKhoanQuanLy`. Lần chạy `khoiTaoHeThong` đầu tiên sau khi nâng cấp sẽ tự tạo 1 tài khoản tên "Sếp Vĩ" dùng đúng `ADMIN_PIN` cũ (để không bị khoá ngoài), Sếp nên vào sheet `TaiKhoanQuanLy` đổi PIN và thêm các quản lý khác ngay sau đó (xem chi tiết ở mục "Sheet `TaiKhoanQuanLy`" bên dưới). Từ giờ, cả trang chấm công lẫn trang báo cáo sẽ hỏi thêm ô "Tên quản lý" bên cạnh PIN.
 >
 > **Quan trọng:** bản này có thêm tính năng lưu ảnh vào Google Drive, nên ở một trong các bước tiếp theo (chạy lại `khoiTaoHeThong`, bấm Deploy, hoặc lần chấm công đầu tiên có lưu ảnh thành công), Google có thể hiện thêm màn hình xin quyền truy cập Drive ("Xem, chỉnh sửa, tạo và xoá các file Google Drive của bạn" hoặc tương tự) - đây là quyền cần thiết để lưu ảnh bằng chứng, bấm **Allow** như các quyền trước.
 6. **Đổi token & PIN bí mật** (bước rất quan trọng, đừng bỏ qua):
@@ -66,9 +68,11 @@ Nếu cần bật GitHub Pages từ đầu: vào repo trên GitHub → **Setting
 ## Cấu trúc Google Sheet (backend tự tạo, có thể chỉnh tay khi cần)
 
 ### Sheet `NhanVien`
-| MaNV | HoTen | TrangThai | NgayTao |
-|---|---|---|---|
+| MaNV | HoTen | TrangThai | NgayTao | DongYSinhTrac | NgayDongY |
+|---|---|---|---|---|---|
 Mã nhân viên, họ tên, trạng thái (`Hoạt động` / `Đã khóa`), ngày tạo. Đổi `TrangThai` thành `Đã khóa` để vô hiệu hoá 1 nhân viên (chặn cả nhận diện lẫn chấm công) mà không cần xoá dữ liệu.
+
+- `DongYSinhTrac`/`NgayDongY`: ghi lại việc nhân viên đã tick đồng ý cho thu thập dữ liệu khuôn mặt lúc đăng ký (bắt buộc trên `index.html`, không thể đăng ký mới nếu chưa tick). Đây là bằng chứng tuân thủ Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân.
 
 ### Sheet `MauKhuonMat`
 | MaNV | Descriptor(JSON) | NgayTao | Nguon |
@@ -76,12 +80,27 @@ Mã nhân viên, họ tên, trạng thái (`Hoạt động` / `Đã khóa`), ng�
 Mỗi dòng là 1 mẫu khuôn mặt (128 số dạng JSON). Hệ thống tự tính **trung bình** tất cả mẫu của 1 mã NV để nhận diện — càng nhiều mẫu (qua "Bổ sung mẫu") càng chính xác.
 
 ### Sheet `ChamCong`
-| ThoiGian | MaNV | HoTen | LoaiChamCong | Lat | Lng | DiaDiem | KhoangCachServer(m) | KhoangCachClient(m) | TrongVungServer | KetQua | LyDoTuChoi | AnhBangChung | CoNghiNgoGPS | LyDoNghiNgoGPS |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ThoiGian | MaNV | HoTen | LoaiChamCong | Lat | Lng | DiaDiem | KhoangCachServer(m) | KhoangCachClient(m) | TrongVungServer | KetQua | LyDoTuChoi | AnhBangChung | CoNghiNgoGPS | LyDoNghiNgoGPS | LoaiXacThuc | NguoiXuLyThuCong |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 Nhật ký toàn bộ lượt chấm công, kể cả lượt bị từ chối (`KetQua` = `Từ chối`, có ghi `LyDoTuChoi`). Đây là sheet dùng để làm Pivot Table / Looker Studio xem báo cáo.
 
 - `AnhBangChung`: link Google Drive tới ảnh chụp lúc chấm công thành công (chỉ tài khoản Google chủ script mới mở xem được, vì file lưu private mặc định). Ảnh nằm trong thư mục Drive `ChamCong_AnhBangChung/yyyy-MM-dd/`.
 - `CoNghiNgoGPS` (TRUE/FALSE) + `LyDoNghiNgoGPS`: cờ nghi ngờ giả mạo vị trí (độ chính xác GPS bất thường, 2 lần đọc GPS trùng khớp tuyệt đối, hoặc tốc độ di chuyển phi thực tế so với lần chấm công trước). **Chỉ đánh dấu để quản lý xem lại, KHÔNG tự động từ chối chấm công** - tránh chặn nhầm làm sai lương nếu heuristic báo sai.
+- `LoaiXacThuc`: `KhuônMặt` (chấm công bình thường qua nhận diện) hoặc `ThủCông` (quản lý ghi hộ qua trang báo cáo khi nhận diện thất bại). `NguoiXuLyThuCong`: tên quản lý đã ghi hộ, chỉ có giá trị khi `LoaiXacThuc = ThủCông`.
+
+### Sheet `TaiKhoanQuanLy`
+| TenQuanLy | PIN | TrangThai | NgayTao |
+|---|---|---|---|
+Danh sách tài khoản quản lý được phép đăng ký nhân viên, bổ sung mẫu, chấm công thủ công, và xem `bao-cao.html`. **Thêm/sửa/khoá tài khoản trực tiếp ở đây**, không cần sửa code hay deploy lại:
+- Thêm 1 dòng mới = thêm 1 quản lý mới (đặt `TrangThai` = `Hoạt động`).
+- Đổi `TrangThai` thành bất kỳ giá trị khác `Hoạt động` (ví dụ `Đã khóa`) để vô hiệu hoá ngay 1 tài khoản (ví dụ khi quản lý đó nghỉ việc).
+- Đổi cột `PIN` để đổi mã PIN của 1 quản lý.
+- Lần chạy `khoiTaoHeThong` đầu tiên tự tạo sẵn 1 dòng "Sếp Vĩ" dùng đúng `ADMIN_PIN` cũ trong Script Properties — **nên đổi PIN này ngay** sau khi nâng cấp, `ADMIN_PIN` ở Script Properties từ nay chỉ còn tác dụng lúc khởi tạo lần đầu, không còn được dùng để xác thực nữa.
+
+### Sheet `NhatKyQuanTri`
+| ThoiGian | TenQuanLy | HanhDong | ChiTiet |
+|---|---|---|---|
+Nhật ký "ai làm gì lúc nào" cho mọi thao tác quản trị: mở khoá đăng ký/báo cáo, đăng ký nhân viên mới, bổ sung mẫu, chấm công thủ công. Dùng sheet này để tra cứu trách nhiệm khi cần.
 
 ### Sheet `DiaDiem`
 | Ten | Lat | Lng | BanKinh(m) |
@@ -113,10 +132,11 @@ Mỗi khi ai đó quét mặt ở tab "Chấm công" nhưng **không khớp vớ
 
 ## Xem báo cáo - trang `bao-cao.html`
 
-Mở `bao-cao.html` (có link "📊 Xem báo cáo quản lý" ngay trong `index.html`), nhập mã PIN quản trị để mở khoá, chọn khoảng ngày (mặc định từ đầu tháng tới hôm nay), có thể lọc theo mã nhân viên. Trang hiển thị:
+Mở `bao-cao.html` (có link "📊 Xem báo cáo quản lý" ngay trong `index.html`), nhập **tên quản lý** + mã PIN để mở khoá (tài khoản phải tồn tại và đang `Hoạt động` trong sheet `TaiKhoanQuanLy`), chọn khoảng ngày (mặc định từ đầu tháng tới hôm nay), có thể lọc theo mã nhân viên. Trang hiển thị:
+- Card **"Chấm công thủ công"**: dùng khi nhận diện khuôn mặt thất bại (camera hỏng, thiết bị lỗi...). Nhập mã NV + loại Vào/Ra + lý do (bắt buộc) → ghi nhận ngay, có gắn nhãn "Thủ công" trong bảng chi tiết và ghi log vào `NhatKyQuanTri`.
 - 5 thẻ thống kê nhanh: số nhân viên có chấm công, tổng giờ công, số lượt đi trễ, số lượt bị từ chối, số lượt nghi ngờ GPS giả mạo.
-- Bảng tổng hợp giờ công / đi trễ / từ chối theo từng nhân viên.
-- Bảng nhật ký chi tiết (tối đa 300 dòng gần nhất) kèm nút "Xem ảnh" (ảnh bằng chứng lưu trên Drive, chỉ tài khoản Google chủ script mở được) và nhãn "Nghi ngờ" nếu GPS bị đánh dấu bất thường (hover vào nhãn để xem lý do).
+- Bảng tổng hợp giờ công / đi trễ / từ chối theo từng nhân viên, kèm nút **"⬇ Xuất CSV"** để tải file cho HR làm lương (mở được trực tiếp bằng Excel, đã xử lý đúng dấu tiếng Việt).
+- Bảng nhật ký chi tiết (tối đa 300 dòng gần nhất) kèm cột "Xác thực" (Khuôn mặt / Thủ công), nút "Xem ảnh" (ảnh bằng chứng lưu trên Drive, chỉ tài khoản Google chủ script mở được), nhãn "Nghi ngờ" nếu GPS bị đánh dấu bất thường (hover để xem lý do), và nút **"⬇ Xuất CSV"** riêng cho bảng này.
 
 Ngoài dashboard này, dữ liệu thô vẫn nằm sạch trong sheet `ChamCong` nên Sếp vẫn có thể tự làm Pivot Table hoặc kết nối Looker Studio nếu muốn phân tích sâu hơn. Cũng có thể gọi thẳng API: `WEB_APP_URL?action=report&token=...&tuNgay=2026-09-01&denNgay=2026-09-30` hoặc `WEB_APP_URL?action=listChamCong&token=...&tuNgay=...&denNgay=...` để lấy JSON thô.
 
@@ -143,3 +163,11 @@ Ngoài dashboard này, dữ liệu thô vẫn nằm sạch trong sheet `ChamCong
 - [ ] Mở `bao-cao.html`, nhập đúng PIN → phải thấy đủ thẻ thống kê + 2 bảng có dữ liệu của lượt chấm công vừa test; bấm "Xem ảnh" ở dòng vừa chấm công phải mở đúng ảnh trên Drive.
 - [ ] Đổi ngày hệ thống hoặc chờ >3 tiếng rồi chấm công lần 2 ở đúng 1 địa điểm → cột `CoNghiNgoGPS` phải là FALSE (không báo nghi ngờ nhầm cho hành vi bình thường).
 - [ ] (Tuỳ chọn, khó test thủ công chính xác) Nếu có 2 điện thoại, thử chấm công tài khoản test ở 2 vị trí cách xa nhau trong thời gian ngắn (<3 tiếng) → cột `CoNghiNgoGPS` nên bật TRUE với lý do "Tốc độ di chuyển... phi thực tế", nhưng **chấm công vẫn phải được ghi nhận thành công** (không bị chặn), đúng thiết kế "chỉ cảnh báo, không chặn lương".
+- [ ] Tab "Đăng ký nhân viên" → đăng ký nhân viên MỚI mà **không tick** ô cam kết đồng ý → phải bị chặn, hiện lỗi yêu cầu tick trước khi lưu.
+- [ ] Đăng ký nhân viên mới có tick đồng ý → mở sheet `NhanVien`, kiểm tra dòng mới có `DongYSinhTrac = TRUE` và `NgayDongY` đúng thời điểm vừa đăng ký.
+- [ ] Mở khoá `index.html` (tab đăng ký) hoặc `bao-cao.html` với **tên quản lý không tồn tại** trong `TaiKhoanQuanLy` → phải báo lỗi rõ ràng, không cho qua.
+- [ ] Mở khoá với tên quản lý đúng nhưng PIN sai 5 lần liên tiếp → bị khoá tạm ~10 phút; **thử mở khoá bằng 1 tên quản lý khác** trong lúc đang bị khoá → phải mở được bình thường (khoá tính riêng theo từng tài khoản, không ảnh hưởng người khác).
+- [ ] Vào `bao-cao.html`, dùng card "Chấm công thủ công" ghi nhận 1 lượt cho mã NV test với lý do bất kỳ → bảng chi tiết phải hiện ngay dòng mới với nhãn "Thủ công" (hover thấy đúng tên quản lý), và sheet `NhatKyQuanTri` phải có dòng log tương ứng.
+- [ ] Thử ghi chấm công thủ công mà **để trống lý do** → phải bị từ chối, không ghi nhận.
+- [ ] Bấm nút "⬇ Xuất CSV" ở cả 2 bảng trên `bao-cao.html`, mở file bằng Excel → dữ liệu đúng, dấu tiếng Việt hiển thị chuẩn (không bị lỗi phông chữ lạ).
+- [ ] Đăng ký nhân viên mới / bổ sung mẫu / mở khoá báo cáo → kiểm tra sheet `NhatKyQuanTri` có ghi đúng tên quản lý đã thực hiện thao tác đó.

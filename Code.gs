@@ -6,14 +6,21 @@
  *   - listEmployees  : lấy danh sách nhân viên + descriptor khuôn mặt (GET)
  *   - listSites       : lấy danh sách địa điểm cho phép chấm công + ngưỡng (GET)
  *   - checkin         : ghi nhận chấm công VÀO/RA (POST)
- *   - register        : đăng ký nhân viên mới (POST, cần adminPin)
- *   - addSample       : bổ sung mẫu khuôn mặt cho nhân viên đã có (POST, cần adminPin)
- *   - verifyPin       : xác thực mã PIN quản trị phía server (POST)
+ *   - checkinThuCong  : chấm công thủ công do quản lý ghi hộ khi nhận diện thất bại (POST, cần tenQuanLy+adminPin+lyDo)
+ *   - register        : đăng ký nhân viên mới (POST, cần tenQuanLy+adminPin+dongY)
+ *   - addSample       : bổ sung mẫu khuôn mặt cho nhân viên đã có (POST, cần tenQuanLy+adminPin)
+ *   - verifyPin       : xác thực tài khoản quản lý (tenQuanLy+PIN) phía server (POST)
  *   - report          : báo cáo tổng hợp giờ công / đi trễ / từ chối (GET)
  *   - listChamCong    : danh sách chi tiết các lượt chấm công gần đây, cho dashboard (GET)
  *   - canhBaoKhongKhop: ghi log khi quét mặt không khớp nhân viên nào (POST, chống dò)
  *
- * PHIÊN BẢN NÀY THÊM: ảnh bằng chứng lưu vào Google Drive khi chấm công thành công,
+ * PHIÊN BẢN NÀY THÊM: tài khoản quản lý riêng từng người (sheet TaiKhoanQuanLy, thay
+ * cho 1 mã PIN dùng chung), nhật ký quản trị (NhatKyQuanTri) để biết "ai" đã đăng ký/
+ * chấm công thủ công/xem báo cáo, cam kết đồng ý thu thập dữ liệu khuôn mặt khi đăng ký
+ * nhân viên mới (cột DongYSinhTrac/NgayDongY trong NhanVien), và chấm công thủ công có
+ * ghi lý do (dự phòng khi camera/nhận diện lỗi).
+ *
+ * PHIÊN BẢN TRƯỚC ĐÃ THÊM: ảnh bằng chứng lưu vào Google Drive khi chấm công thành công,
  * và cờ nghi ngờ giả mạo GPS (không tự động chặn - chỉ đánh dấu để quản lý xem lại,
  * tránh chặn nhầm ảnh hưởng lương nếu heuristic sai). Vì có ghi file vào Drive, lần
  * deploy lại đầu tiên sau khi cập nhật file này Google sẽ hỏi cấp thêm quyền Drive -
@@ -75,6 +82,7 @@ function doPost(e) {
 
     switch (body.action) {
       case 'checkin':          return jsonOut_(xuLyChamCong_(body));
+      case 'checkinThuCong':   return jsonOut_(xuLyChamCongThuCong_(body));
       case 'register':         return jsonOut_(xuLyDangKy_(body));
       case 'addSample':        return jsonOut_(xuLyThemMau_(body));
       case 'verifyPin':        return jsonOut_(xuLyXacThucPin_(body));
@@ -99,12 +107,34 @@ function kiemTraToken_(token) {
   }
 }
 
-/** Kiểm tra mã PIN quản trị gửi từ client (dùng cho register/addSample) khớp Script Properties. */
-function kiemTraAdminPin_(pin) {
-  var expected = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
-  if (!expected || String(pin) !== expected) {
-    throw new Error('Mã PIN quản trị không đúng.');
+/**
+ * Kiểm tra tài khoản quản lý (tên + PIN riêng từng người) gửi từ client, dùng cho
+ * register/addSample/checkinThuCong. Tra trong sheet TaiKhoanQuanLy thay vì 1 mã
+ * PIN dùng chung, để biết chính xác "ai" đã thực hiện thao tác quản trị.
+ */
+function kiemTraTaiKhoanQuanLy_(tenQuanLy, pin) {
+  tenQuanLy = String(tenQuanLy || '').trim();
+  if (!tenQuanLy) throw new Error('Thiếu tên quản lý.');
+  var sh = laySheet_('TaiKhoanQuanLy');
+  var data = sh.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === tenQuanLy) {
+      if (String(data[i][2]).trim() !== 'Hoạt động') {
+        throw new Error('Tài khoản quản lý "' + tenQuanLy + '" đã bị khoá.');
+      }
+      if (String(data[i][1]) !== String(pin)) {
+        throw new Error('Sai PIN cho tài khoản "' + tenQuanLy + '".');
+      }
+      return;
+    }
   }
+  throw new Error('Không tìm thấy tài khoản quản lý "' + tenQuanLy + '".');
+}
+
+/** Ghi 1 dòng vào NhatKyQuanTri - nhật ký "ai làm gì lúc nào" cho các thao tác quản trị. */
+function ghiNhatKyQuanTri_(tenQuanLy, hanhDong, chiTiet) {
+  var sh = laySheet_('NhatKyQuanTri');
+  sh.appendRow([new Date(), tenQuanLy || '', hanhDong || '', chiTiet || '']);
 }
 
 /* ============================= TIỆN ÍCH SHEET ============================= */
@@ -343,15 +373,58 @@ function timBanGhiChamCongGanNhat_(sh, maNV) {
   return null;
 }
 
-function ghiNhatKyChamCong_(maNV, hoTen, loai, lat, lng, tenDiaDiem, khoangCachServer, khoangCachClient, trongVung, ketQua, lyDo, anhUrl, coNghiNgoGps, lyDoNghiNgoGps) {
+function ghiNhatKyChamCong_(maNV, hoTen, loai, lat, lng, tenDiaDiem, khoangCachServer, khoangCachClient, trongVung, ketQua, lyDo, anhUrl, coNghiNgoGps, lyDoNghiNgoGps, loaiXacThuc, nguoiXuLyThuCong) {
   var sh = laySheet_('ChamCong');
   sh.appendRow([
     new Date(), maNV, hoTen, loai, lat, lng, tenDiaDiem || '',
     khoangCachServer != null ? Math.round(khoangCachServer) : '',
     khoangCachClient != null ? Math.round(khoangCachClient) : '',
     trongVung, ketQua, lyDo || '',
-    anhUrl || '', !!coNghiNgoGps, lyDoNghiNgoGps || ''
+    anhUrl || '', !!coNghiNgoGps, lyDoNghiNgoGps || '',
+    loaiXacThuc || 'KhuônMặt', nguoiXuLyThuCong || ''
   ]);
+}
+
+/**
+ * Chấm công THỦ CÔNG do quản lý ghi hộ khi nhận diện khuôn mặt thất bại (camera hỏng,
+ * đổi diện mạo chưa cập nhật mẫu, thiết bị lỗi...). Bắt buộc tài khoản quản lý (tên+PIN)
+ * và LÝ DO không được để trống, để tránh lạm dụng thay cho chấm công thật. Không kiểm
+ * tra GPS/ảnh/liveness (đây là ghi đè có chủ đích của quản lý, có ghi log riêng để
+ * truy vết trong NhatKyQuanTri + cột NguoiXuLyThuCong trong ChamCong).
+ */
+function xuLyChamCongThuCong_(body) {
+  kiemTraTaiKhoanQuanLy_(body.tenQuanLy, body.adminPin);
+
+  var maNV = String(body.maNV || '').trim();
+  var loai = String(body.loaiChamCong || '').trim();
+  var lyDo = String(body.lyDo || '').trim();
+  if (!maNV || (loai !== 'Vào' && loai !== 'Ra')) {
+    return { ok: false, error: 'Dữ liệu chấm công thủ công không hợp lệ.' };
+  }
+  if (!lyDo) {
+    return { ok: false, error: 'Cần nhập lý do chấm công thủ công.' };
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var shNV = laySheet_('NhanVien');
+    var dataNV = shNV.getDataRange().getValues();
+    var hoTen = null, trangThai = null;
+    for (var i = 1; i < dataNV.length; i++) {
+      if (String(dataNV[i][0]) === maNV) { hoTen = String(dataNV[i][1]); trangThai = String(dataNV[i][2]); break; }
+    }
+    if (!hoTen) return { ok: false, error: 'Mã nhân viên không tồn tại trong hệ thống.' };
+    if (trangThai === 'Đã khóa') return { ok: false, error: 'Tài khoản nhân viên đã bị khóa.' };
+
+    ghiNhatKyChamCong_(maNV, hoTen, loai, null, null, '', null, null, null, 'Thành công',
+      'Thủ công: ' + lyDo, '', false, '', 'ThủCông', body.tenQuanLy);
+    ghiNhatKyQuanTri_(body.tenQuanLy, 'Chấm công thủ công', maNV + ' (' + hoTen + ') - ' + loai + ' - Lý do: ' + lyDo);
+
+    return { ok: true, thoiGian: new Date().toISOString(), hoTen: hoTen };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -405,7 +478,7 @@ function xuLyKiemTraDrive_() {
  * để sau này listEmployees tự tính trung bình, và addSample có thể bổ sung thêm.
  */
 function xuLyDangKy_(body) {
-  kiemTraAdminPin_(body.adminPin);
+  kiemTraTaiKhoanQuanLy_(body.tenQuanLy, body.adminPin);
 
   var maNV = String(body.maNV || '').trim();
   var hoTen = String(body.hoTen || '').trim();
@@ -414,6 +487,9 @@ function xuLyDangKy_(body) {
   if (!maNV || !hoTen) return { ok: false, error: 'Thiếu mã nhân viên hoặc họ tên.' };
   if (!Array.isArray(descriptors) || descriptors.length < 3) {
     return { ok: false, error: 'Cần ít nhất 3 mẫu khuôn mặt.' };
+  }
+  if (body.dongY !== true) {
+    return { ok: false, error: 'Cần xác nhận nhân viên đã đồng ý cho thu thập dữ liệu khuôn mặt trước khi đăng ký.' };
   }
 
   var lock = LockService.getScriptLock();
@@ -427,7 +503,7 @@ function xuLyDangKy_(body) {
         return { ok: false, error: 'Mã nhân viên "' + maNV + '" đã tồn tại. Dùng chức năng "Thêm mẫu" nếu muốn bổ sung khuôn mặt.' };
       }
     }
-    shNV.appendRow([maNV, hoTen, 'Hoạt động', new Date()]);
+    shNV.appendRow([maNV, hoTen, 'Hoạt động', new Date(), true, new Date()]);
 
     var shMau = laySheet_('MauKhuonMat');
     descriptors.forEach(function (d) {
@@ -435,6 +511,7 @@ function xuLyDangKy_(body) {
     });
 
     ghiNhatKyDangKy_(maNV, hoTen, 'Đăng ký mới', body.thietBi, 'Thành công');
+    ghiNhatKyQuanTri_(body.tenQuanLy, 'Đăng ký nhân viên mới', maNV + ' (' + hoTen + ')');
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -443,7 +520,7 @@ function xuLyDangKy_(body) {
 
 /** Bổ sung thêm mẫu khuôn mặt cho nhân viên đã tồn tại (ví dụ đổi kiểu tóc, đeo kính). */
 function xuLyThemMau_(body) {
-  kiemTraAdminPin_(body.adminPin);
+  kiemTraTaiKhoanQuanLy_(body.tenQuanLy, body.adminPin);
 
   var maNV = String(body.maNV || '').trim();
   var descriptors = body.descriptors;
@@ -472,6 +549,7 @@ function xuLyThemMau_(body) {
     });
 
     ghiNhatKyDangKy_(maNV, hoTen, 'Thêm mẫu', body.thietBi, 'Thành công');
+    ghiNhatKyQuanTri_(body.tenQuanLy, 'Thêm mẫu khuôn mặt', maNV + ' (' + hoTen + ')');
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -486,24 +564,34 @@ function ghiNhatKyDangKy_(maNV, hoTen, hanhDong, thietBi, ketQua) {
 /* ============================= XÁC THỰC PIN ============================= */
 
 /**
- * Xác thực PIN quản trị hoàn toàn ở server (client không còn biết PIN thật).
- * Có khóa tạm sau nhiều lần sai để chống dò PIN (brute-force): 5 lần sai liên
- * tiếp sẽ khóa 10 phút (chặt hơn mức 10 lần/5 phút trước đây).
+ * Xác thực tài khoản quản lý (tên + PIN riêng từng người) hoàn toàn ở server. Khoá
+ * tạm được tính RIÊNG theo từng tên tài khoản (không khoá chung), để 1 người nhập
+ * sai nhiều lần không ảnh hưởng các quản lý khác: 5 lần sai liên tiếp khoá 10 phút.
  */
 function xuLyXacThucPin_(body) {
+  var tenQuanLy = String(body.tenQuanLy || '').trim();
+  if (!tenQuanLy) return { ok: true, valid: false, error: 'Thiếu tên quản lý.' };
+
   var cache = CacheService.getScriptCache();
-  var khoaDem = 'pin_fail_count';
+  var khoaDem = 'pin_fail_' + tenQuanLy;
   var soLanSai = Number(cache.get(khoaDem) || 0);
   if (soLanSai >= 5) {
     return { ok: true, valid: false, khoa: true, error: 'Nhập sai PIN quá nhiều lần, vui lòng thử lại sau khoảng 10 phút.' };
   }
 
-  var expected = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
-  var dung = !!expected && String(body.pin) === expected;
+  var dung = false;
+  try {
+    kiemTraTaiKhoanQuanLy_(tenQuanLy, body.pin);
+    dung = true;
+  } catch (e) {
+    dung = false;
+  }
+
   if (!dung) {
     cache.put(khoaDem, String(soLanSai + 1), 600);
   } else {
     cache.remove(khoaDem);
+    ghiNhatKyQuanTri_(tenQuanLy, 'Mở khoá (verifyPin)', '');
   }
   return { ok: true, valid: dung };
 }
@@ -626,7 +714,8 @@ function layDanhSachChamCong_(tuNgayStr, denNgayStr, maNVLoc, limitStr) {
     ketQuaList.push({
       thoiGian: row[0], maNV: maNV, hoTen: String(row[2]), loaiChamCong: String(row[3]),
       diaDiem: String(row[6] || ''), ketQua: String(row[10]), lyDoTuChoi: String(row[11] || ''),
-      anhBangChung: String(row[12] || ''), coNghiNgoGps: !!row[13], lyDoNghiNgoGps: String(row[14] || '')
+      anhBangChung: String(row[12] || ''), coNghiNgoGps: !!row[13], lyDoNghiNgoGps: String(row[14] || ''),
+      loaiXacThuc: String(row[15] || 'KhuônMặt'), nguoiXuLyThuCong: String(row[16] || '')
     });
   }
 
@@ -644,13 +733,15 @@ function layDanhSachChamCong_(tuNgayStr, denNgayStr, maNVLoc, limitStr) {
 function khoiTaoHeThong() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  taoSheetNeuChua_(ss, 'NhanVien', ['MaNV', 'HoTen', 'TrangThai', 'NgayTao']);
+  taoSheetNeuChua_(ss, 'NhanVien', ['MaNV', 'HoTen', 'TrangThai', 'NgayTao', 'DongYSinhTrac', 'NgayDongY']);
   taoSheetNeuChua_(ss, 'MauKhuonMat', ['MaNV', 'Descriptor(JSON)', 'NgayTao', 'Nguon']);
-  taoSheetNeuChua_(ss, 'ChamCong', ['ThoiGian', 'MaNV', 'HoTen', 'LoaiChamCong', 'Lat', 'Lng', 'DiaDiem', 'KhoangCachServer(m)', 'KhoangCachClient(m)', 'TrongVungServer', 'KetQua', 'LyDoTuChoi', 'AnhBangChung', 'CoNghiNgoGPS', 'LyDoNghiNgoGPS']);
+  taoSheetNeuChua_(ss, 'ChamCong', ['ThoiGian', 'MaNV', 'HoTen', 'LoaiChamCong', 'Lat', 'Lng', 'DiaDiem', 'KhoangCachServer(m)', 'KhoangCachClient(m)', 'TrongVungServer', 'KetQua', 'LyDoTuChoi', 'AnhBangChung', 'CoNghiNgoGPS', 'LyDoNghiNgoGPS', 'LoaiXacThuc', 'NguoiXuLyThuCong']);
   taoSheetNeuChua_(ss, 'DiaDiem', ['Ten', 'Lat', 'Lng', 'BanKinh(m)']);
   taoSheetNeuChua_(ss, 'CauHinh', ['Key', 'Value', 'GhiChu']);
   taoSheetNeuChua_(ss, 'NhatKyDangKy', ['ThoiGian', 'MaNV', 'HoTen', 'HanhDong', 'ThietBi', 'KetQua']);
   taoSheetNeuChua_(ss, 'CanhBaoNhanDien', ['ThoiGian', 'LyDo', 'KhoangCachToiThieu', 'ThietBi']);
+  taoSheetNeuChua_(ss, 'TaiKhoanQuanLy', ['TenQuanLy', 'PIN', 'TrangThai', 'NgayTao']);
+  taoSheetNeuChua_(ss, 'NhatKyQuanTri', ['ThoiGian', 'TenQuanLy', 'HanhDong', 'ChiTiet']);
 
   var shDiaDiem = ss.getSheetByName('DiaDiem');
   if (shDiaDiem.getLastRow() < 2) {
@@ -670,7 +761,16 @@ function khoiTaoHeThong() {
   if (!props.getProperty('APP_TOKEN')) props.setProperty('APP_TOKEN', 'Idsids@@');
   if (!props.getProperty('ADMIN_PIN')) props.setProperty('ADMIN_PIN', '1997');
 
-  Logger.log('Đã khởi tạo xong. QUAN TRỌNG: vào Project Settings > Script Properties để đổi APP_TOKEN và ADMIN_PIN sang giá trị bí mật riêng, sau đó cập nhật APP_TOKEN mới vào index.html.');
+  // Seed tài khoản quản lý đầu tiên từ ADMIN_PIN cũ (nếu sheet TaiKhoanQuanLy chưa có dữ liệu),
+  // để không bị khoá ngoài ngày đầu chuyển từ "1 PIN chung" sang "tài khoản riêng từng người".
+  // Sếp nên vào sheet TaiKhoanQuanLy đổi tên/PIN và thêm các quản lý khác sau khi khởi tạo xong.
+  var shTaiKhoan = ss.getSheetByName('TaiKhoanQuanLy');
+  if (shTaiKhoan.getLastRow() < 2) {
+    var adminPinCu = props.getProperty('ADMIN_PIN') || '1997';
+    shTaiKhoan.appendRow(['Sếp Vĩ', adminPinCu, 'Hoạt động', new Date()]);
+  }
+
+  Logger.log('Đã khởi tạo xong. QUAN TRỌNG: (1) vào Project Settings > Script Properties đổi APP_TOKEN sang giá trị bí mật riêng, cập nhật vào config.js; (2) vào sheet TaiKhoanQuanLy đổi PIN mặc định và thêm các tài khoản quản lý khác.');
 }
 
 function taoSheetNeuChua_(ss, ten, headers) {

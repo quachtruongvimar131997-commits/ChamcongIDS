@@ -207,6 +207,8 @@
   <!-- ================= ĐĂNG KÝ ================= -->
   <div id="tab-register" class="hidden">
     <div class="card" id="reg-pin-card">
+      <label>Tên quản lý</label>
+      <input type="text" id="reg-ten-quanly" placeholder="VD: Sếp Vĩ">
       <label>Mã PIN quản trị</label>
       <input type="password" id="reg-pin" placeholder="Nhập mã PIN để mở khóa đăng ký">
       <button id="reg-unlock">Mở khóa</button>
@@ -227,6 +229,13 @@
       <div id="reg-hoten-wrap">
         <label>Họ và tên</label>
         <input type="text" id="reg-hoten" placeholder="VD: Nguyễn Văn A">
+      </div>
+
+      <div class="note-box" id="reg-dongy-wrap">
+        <label style="display:flex; align-items:flex-start; gap:8px; margin:0; color:var(--text); cursor:pointer;">
+          <input type="checkbox" id="reg-dongy" style="width:auto; margin-top:3px; flex-shrink:0;">
+          <span>Tôi đồng ý cho Công ty CP DV PP Tổng Hợp Quốc Tế (IDS) thu thập, lưu trữ và sử dụng dữ liệu đặc trưng khuôn mặt của tôi (dạng số hoá, không lưu ảnh gốc) với mục đích DUY NHẤT là xác thực danh tính khi chấm công. Dữ liệu chỉ lưu trong hệ thống nội bộ công ty, không chia sẻ cho bên thứ ba. Tôi có quyền yêu cầu xoá dữ liệu này khi nghỉ việc hoặc có lý do chính đáng khác, theo Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân.</span>
+        </label>
       </div>
 
       <div class="video-wrap" style="margin-top:12px;">
@@ -639,28 +648,31 @@ document.getElementById('ci-out').addEventListener('click', () => submitCheckin(
 
 /* ================= ĐĂNG KÝ / BỔ SUNG MẪU NHÂN VIÊN ================= */
 let regAdminPin = null; // PIN chỉ giữ trong bộ nhớ tạm sau khi server xác thực đúng, không lưu ở đâu khác
+let regTenQuanLy = null; // tên tài khoản quản lý đã xác thực, gửi kèm mọi thao tác để truy vết "ai" thao tác
 let regMode = 'new'; // 'new' = đăng ký mới (5 mẫu) | 'add' = bổ sung mẫu (2 mẫu) cho NV đã có
 
 document.getElementById('reg-unlock').addEventListener('click', async () => {
   const pinStatus = document.getElementById('reg-pin-status');
+  const tenQuanLy = document.getElementById('reg-ten-quanly').value.trim();
   const pin = document.getElementById('reg-pin').value;
-  if (!pin) { alert('Vui lòng nhập mã PIN.'); return; }
+  if (!tenQuanLy || !pin) { alert('Vui lòng nhập tên quản lý và mã PIN.'); return; }
   setStatus(pinStatus, 'info', 'Đang kiểm tra...');
   try {
     const res = await fetch(CONFIG.WEB_APP_URL, {
       method: 'POST',
-      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'verifyPin', pin })
+      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'verifyPin', tenQuanLy, pin })
     });
     const data = await res.json();
     if (data.ok && data.valid) {
       regAdminPin = pin;
+      regTenQuanLy = tenQuanLy;
       document.getElementById('reg-pin-card').classList.add('hidden');
       document.getElementById('reg-mode-card').classList.remove('hidden');
       chonCheDoDangKy('new');
     } else if (data.khoa) {
       setStatus(pinStatus, 'err', data.error || 'Đã khóa tạm thời do nhập sai nhiều lần.');
     } else {
-      setStatus(pinStatus, 'err', 'Sai mã PIN.');
+      setStatus(pinStatus, 'err', data.error || 'Sai tên quản lý hoặc mã PIN.');
     }
   } catch (e) {
     setStatus(pinStatus, 'err', 'Không kiểm tra được PIN: ' + e.message);
@@ -673,6 +685,8 @@ function chonCheDoDangKy(mode) {
   document.getElementById('reg-mode-add').classList.toggle('active', mode === 'add');
   document.getElementById('reg-form-card').classList.remove('hidden');
   document.getElementById('reg-hoten-wrap').classList.toggle('hidden', mode === 'add');
+  document.getElementById('reg-dongy-wrap').classList.toggle('hidden', mode === 'add');
+  document.getElementById('reg-dongy').checked = false;
   document.getElementById('reg-manv').placeholder = mode === 'new' ? 'VD: NV001 (mã mới)' : 'VD: NV001 (mã đã có sẵn)';
   regDescriptors = [];
   document.getElementById('reg-save').classList.add('hidden');
@@ -743,17 +757,23 @@ document.getElementById('reg-save').addEventListener('click', async () => {
   const maNV = document.getElementById('reg-manv').value.trim();
   const hoTen = document.getElementById('reg-hoten').value.trim();
 
+  if (regMode === 'new' && !document.getElementById('reg-dongy').checked) {
+    setStatus(regStatus, 'err', 'Cần tick xác nhận nhân viên đã đồng ý cho thu thập dữ liệu khuôn mặt trước khi lưu.');
+    return;
+  }
+
   setStatus(regStatus, 'info', 'Đang lưu...');
   try {
     const body = {
       token: CONFIG.APP_TOKEN,
       action: regMode === 'new' ? 'register' : 'addSample',
+      tenQuanLy: regTenQuanLy,
       adminPin: regAdminPin,
       maNV,
       descriptors: regDescriptors,
       thietBi: navigator.userAgent
     };
-    if (regMode === 'new') body.hoTen = hoTen;
+    if (regMode === 'new') { body.hoTen = hoTen; body.dongY = true; }
 
     const res = await fetch(CONFIG.WEB_APP_URL, { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
@@ -766,6 +786,7 @@ document.getElementById('reg-save').addEventListener('click', async () => {
       document.getElementById('reg-capture').disabled = false;
       document.getElementById('reg-manv').value = '';
       document.getElementById('reg-hoten').value = '';
+      document.getElementById('reg-dongy').checked = false;
       await fetchEmployees(); // cập nhật lại danh sách nhân viên/khuôn mặt ngay để dùng được luôn
     } else {
       setStatus(regStatus, 'err', 'Lỗi: ' + data.error);
