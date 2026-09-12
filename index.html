@@ -76,9 +76,9 @@
     border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px;
     box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
   }
-  video, canvas { width: 100%; border-radius: 14px; background: #000; }
+  video { width: 100%; border-radius: 14px; background: #000; display: block; }
   .video-wrap { position: relative; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--border-strong); }
-  .video-wrap canvas { position: absolute; top: 0; left: 0; }
+  .video-wrap canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: transparent; pointer-events: none; }
   label { display: block; font-size: 12.5px; color: var(--text-dim); margin: 12px 0 6px; letter-spacing: .2px; }
   input[type=text], input[type=password] {
     width: 100%; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
