@@ -89,13 +89,17 @@ Nhật ký toàn bộ lượt chấm công, kể cả lượt bị từ chối (
 - `LoaiXacThuc`: `KhuônMặt` (chấm công bình thường qua nhận diện) hoặc `ThủCông` (quản lý ghi hộ qua trang báo cáo khi nhận diện thất bại). `NguoiXuLyThuCong`: tên quản lý đã ghi hộ, chỉ có giá trị khi `LoaiXacThuc = ThủCông`.
 
 ### Sheet `TaiKhoanQuanLy`
-| TenQuanLy | PIN | TrangThai | NgayTao |
-|---|---|---|---|
+| TenQuanLy | PIN | TrangThai | NgayTao | Quyen |
+|---|---|---|---|---|
 Danh sách tài khoản quản lý được phép đăng ký nhân viên, bổ sung mẫu, chấm công thủ công, và xem `bao-cao.html`. **Thêm/sửa/khoá tài khoản trực tiếp ở đây**, không cần sửa code hay deploy lại:
 - Thêm 1 dòng mới = thêm 1 quản lý mới (đặt `TrangThai` = `Hoạt động`).
 - Đổi `TrangThai` thành bất kỳ giá trị khác `Hoạt động` (ví dụ `Đã khóa`) để vô hiệu hoá ngay 1 tài khoản (ví dụ khi quản lý đó nghỉ việc).
 - Đổi cột `PIN` để đổi mã PIN của 1 quản lý.
 - Lần chạy `khoiTaoHeThong` đầu tiên tự tạo sẵn 1 dòng "Sếp Vĩ" dùng đúng `ADMIN_PIN` cũ trong Script Properties — **nên đổi PIN này ngay** sau khi nâng cấp, `ADMIN_PIN` ở Script Properties từ nay chỉ còn tác dụng lúc khởi tạo lần đầu, không còn được dùng để xác thực nữa.
+- **Cột `Quyen`** — 2 giá trị hợp lệ:
+  - `Toàn quyền`: làm được mọi thao tác, kể cả **chấm công thủ công**.
+  - `Chỉ xem`: xem báo cáo, xuất CSV, đăng ký nhân viên mới/bổ sung mẫu khuôn mặt — **không** chấm công thủ công được (server tự chặn dù có cố gọi thẳng API). Trên `bao-cao.html`, card "Chấm công thủ công" cũng tự ẩn với tài khoản này.
+  - Để trống = coi như `Toàn quyền` (áp dụng cho các tài khoản tạo từ trước khi có cột này, để không ai bị mất quyền đột ngột).
 
 ### Sheet `NhatKyQuanTri`
 | ThoiGian | TenQuanLy | HanhDong | ChiTiet |
@@ -171,3 +175,5 @@ Ngoài dashboard này, dữ liệu thô vẫn nằm sạch trong sheet `ChamCong
 - [ ] Thử ghi chấm công thủ công mà **để trống lý do** → phải bị từ chối, không ghi nhận.
 - [ ] Bấm nút "⬇ Xuất CSV" ở cả 2 bảng trên `bao-cao.html`, mở file bằng Excel → dữ liệu đúng, dấu tiếng Việt hiển thị chuẩn (không bị lỗi phông chữ lạ).
 - [ ] Đăng ký nhân viên mới / bổ sung mẫu / mở khoá báo cáo → kiểm tra sheet `NhatKyQuanTri` có ghi đúng tên quản lý đã thực hiện thao tác đó.
+- [ ] Tạo 1 tài khoản test trong `TaiKhoanQuanLy` với `Quyen` = `Chỉ xem` → mở khoá `bao-cao.html` bằng tài khoản này, card "Chấm công thủ công" phải **tự ẩn**; thử đăng ký nhân viên mới bằng tài khoản này trên `index.html` → vẫn phải **thành công bình thường**.
+- [ ] Vẫn với tài khoản `Chỉ xem` ở trên, gọi thẳng action `checkinThuCong` (ví dụ qua Postman) → phải bị từ chối với lỗi nêu rõ cần tài khoản "Toàn quyền", dù có PIN đúng.

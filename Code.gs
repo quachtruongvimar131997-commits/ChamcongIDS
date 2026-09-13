@@ -111,6 +111,13 @@ function kiemTraToken_(token) {
  * Kiểm tra tài khoản quản lý (tên + PIN riêng từng người) gửi từ client, dùng cho
  * register/addSample/checkinThuCong. Tra trong sheet TaiKhoanQuanLy thay vì 1 mã
  * PIN dùng chung, để biết chính xác "ai" đã thực hiện thao tác quản trị.
+ *
+ * Trả về QUYỀN của tài khoản (cột Quyen):
+ *   - "Toàn quyền": làm được mọi thao tác quản trị, kể cả chấm công thủ công.
+ *   - "Chỉ xem": xem báo cáo/xuất CSV + đăng ký nhân viên mới/bổ sung mẫu khuôn mặt,
+ *     KHÔNG được chấm công thủ công (thao tác ghi đè không qua kiểm tra GPS/khuôn mặt).
+ * Cột Quyen để trống (tài khoản tạo trước khi có tính năng này) được coi là "Toàn quyền"
+ * để không đột ngột mất quyền đang dùng.
  */
 function kiemTraTaiKhoanQuanLy_(tenQuanLy, pin) {
   tenQuanLy = String(tenQuanLy || '').trim();
@@ -125,7 +132,7 @@ function kiemTraTaiKhoanQuanLy_(tenQuanLy, pin) {
       if (String(data[i][1]) !== String(pin)) {
         throw new Error('Sai PIN cho tài khoản "' + tenQuanLy + '".');
       }
-      return;
+      return String(data[i][4] || '').trim() || 'Toàn quyền';
     }
   }
   throw new Error('Không tìm thấy tài khoản quản lý "' + tenQuanLy + '".');
@@ -393,7 +400,10 @@ function ghiNhatKyChamCong_(maNV, hoTen, loai, lat, lng, tenDiaDiem, khoangCachS
  * truy vết trong NhatKyQuanTri + cột NguoiXuLyThuCong trong ChamCong).
  */
 function xuLyChamCongThuCong_(body) {
-  kiemTraTaiKhoanQuanLy_(body.tenQuanLy, body.adminPin);
+  var quyen = kiemTraTaiKhoanQuanLy_(body.tenQuanLy, body.adminPin);
+  if (quyen !== 'Toàn quyền') {
+    return { ok: false, error: 'Tài khoản "' + body.tenQuanLy + '" chỉ có quyền "Chỉ xem", không được chấm công thủ công. Cần tài khoản "Toàn quyền".' };
+  }
 
   var maNV = String(body.maNV || '').trim();
   var loai = String(body.loaiChamCong || '').trim();
@@ -579,9 +589,9 @@ function xuLyXacThucPin_(body) {
     return { ok: true, valid: false, khoa: true, error: 'Nhập sai PIN quá nhiều lần, vui lòng thử lại sau khoảng 10 phút.' };
   }
 
-  var dung = false;
+  var dung = false, quyen = '';
   try {
-    kiemTraTaiKhoanQuanLy_(tenQuanLy, body.pin);
+    quyen = kiemTraTaiKhoanQuanLy_(tenQuanLy, body.pin);
     dung = true;
   } catch (e) {
     dung = false;
@@ -593,7 +603,7 @@ function xuLyXacThucPin_(body) {
     cache.remove(khoaDem);
     ghiNhatKyQuanTri_(tenQuanLy, 'Mở khoá (verifyPin)', '');
   }
-  return { ok: true, valid: dung };
+  return { ok: true, valid: dung, quyen: quyen };
 }
 
 /* ============================= CẢNH BÁO NHẬN DIỆN BẤT THƯỜNG ============================= */
@@ -740,7 +750,7 @@ function khoiTaoHeThong() {
   taoSheetNeuChua_(ss, 'CauHinh', ['Key', 'Value', 'GhiChu']);
   taoSheetNeuChua_(ss, 'NhatKyDangKy', ['ThoiGian', 'MaNV', 'HoTen', 'HanhDong', 'ThietBi', 'KetQua']);
   taoSheetNeuChua_(ss, 'CanhBaoNhanDien', ['ThoiGian', 'LyDo', 'KhoangCachToiThieu', 'ThietBi']);
-  taoSheetNeuChua_(ss, 'TaiKhoanQuanLy', ['TenQuanLy', 'PIN', 'TrangThai', 'NgayTao']);
+  taoSheetNeuChua_(ss, 'TaiKhoanQuanLy', ['TenQuanLy', 'PIN', 'TrangThai', 'NgayTao', 'Quyen']);
   taoSheetNeuChua_(ss, 'NhatKyQuanTri', ['ThoiGian', 'TenQuanLy', 'HanhDong', 'ChiTiet']);
 
   var shDiaDiem = ss.getSheetByName('DiaDiem');
@@ -767,10 +777,19 @@ function khoiTaoHeThong() {
   var shTaiKhoan = ss.getSheetByName('TaiKhoanQuanLy');
   if (shTaiKhoan.getLastRow() < 2) {
     var adminPinCu = props.getProperty('ADMIN_PIN') || '1997';
-    shTaiKhoan.appendRow(['Sếp Vĩ', adminPinCu, 'Hoạt động', new Date()]);
+    shTaiKhoan.appendRow(['Sếp Vĩ', adminPinCu, 'Hoạt động', new Date(), 'Toàn quyền']);
   }
 
-  Logger.log('Đã khởi tạo xong. QUAN TRỌNG: (1) vào Project Settings > Script Properties đổi APP_TOKEN sang giá trị bí mật riêng, cập nhật vào config.js; (2) vào sheet TaiKhoanQuanLy đổi PIN mặc định và thêm các tài khoản quản lý khác.');
+  // Nâng cấp: điền "Toàn quyền" cho các tài khoản đã tạo trước khi có cột Quyen (để trống),
+  // để không ai bị bất ngờ mất quyền đang dùng (chấm công thủ công) sau khi nâng cấp.
+  var dataTaiKhoan = shTaiKhoan.getDataRange().getValues();
+  for (var tk = 1; tk < dataTaiKhoan.length; tk++) {
+    if (!String(dataTaiKhoan[tk][4] || '').trim()) {
+      shTaiKhoan.getRange(tk + 1, 5).setValue('Toàn quyền');
+    }
+  }
+
+  Logger.log('Đã khởi tạo xong. QUAN TRỌNG: (1) vào Project Settings > Script Properties đổi APP_TOKEN sang giá trị bí mật riêng, cập nhật vào config.js; (2) vào sheet TaiKhoanQuanLy đổi PIN mặc định và thêm các tài khoản quản lý khác; (3) cột Quyen: "Toàn quyền" hoặc "Chỉ xem" (xem báo cáo/xuất CSV/đăng ký khuôn mặt, không chấm công thủ công).');
 }
 
 function taoSheetNeuChua_(ss, ten, headers) {

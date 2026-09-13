@@ -162,7 +162,7 @@
       <div id="report-status" class="status hidden"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="tc-card">
       <h3 style="margin-top:0;">Chấm công thủ công</h3>
       <div class="small">Dùng khi nhận diện khuôn mặt thất bại (camera hỏng, thiết bị lỗi...). Bắt buộc ghi rõ lý do để lưu vết.</div>
       <div class="row">
@@ -236,6 +236,7 @@ document.getElementById('pin-unlock').addEventListener('click', async () => {
       tenQuanLy = ten;
       document.getElementById('pin-card').classList.add('hidden');
       document.getElementById('report-area').classList.remove('hidden');
+      document.getElementById('tc-card').classList.toggle('hidden', data.quyen !== 'Toàn quyền');
       datMacDinhKhoangNgay();
       xemBaoCao();
     } else if (data.khoa) {
