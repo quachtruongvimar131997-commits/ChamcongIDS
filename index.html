@@ -353,6 +353,11 @@ function capNhatTienDo(percent, text) {
   loadingText.textContent = text;
 }
 
+// Chỉ đổi dòng chữ, không đổi %, dùng khi có hiệu ứng nhích % riêng đang chạy song song (xem khoiDongApp).
+function capNhatVanBan_(text) {
+  loadingText.textContent = text;
+}
+
 function hienThiLoiTai(msg) {
   loadingErr.textContent = msg;
   loadingErr.classList.remove('hidden');
@@ -407,7 +412,7 @@ async function fetchJsonThuLai_(url, soLanThuToiDa, onDangThuLai) {
 
 async function fetchSites() {
   const url = CONFIG.WEB_APP_URL + '?action=listSites&token=' + encodeURIComponent(CONFIG.APP_TOKEN);
-  const data = await fetchJsonThuLai_(url, 3, (lan, tong) => capNhatTienDo(85, `Đang tải danh sách địa điểm & cấu hình... (thử lại lần ${lan}/${tong - 1})`));
+  const data = await fetchJsonThuLai_(url, 3, (lan, tong) => capNhatVanBan_(`Đang tải địa điểm & cấu hình... (thử lại lần ${lan}/${tong - 1})`));
   if (!data.ok) throw new Error(data.error || 'Không lấy được danh sách địa điểm.');
   SITES = data.sites || [];
   if (data.nguongNhanDien) FACE_MATCH_THRESHOLD = Number(data.nguongNhanDien);
@@ -415,7 +420,7 @@ async function fetchSites() {
 
 async function fetchEmployees() {
   const url = CONFIG.WEB_APP_URL + '?action=listEmployees&token=' + encodeURIComponent(CONFIG.APP_TOKEN);
-  const data = await fetchJsonThuLai_(url, 3, (lan, tong) => capNhatTienDo(95, `Đang tải danh sách nhân viên... (thử lại lần ${lan}/${tong - 1})`));
+  const data = await fetchJsonThuLai_(url, 3, (lan, tong) => capNhatVanBan_(`Đang tải danh sách nhân viên... (thử lại lần ${lan}/${tong - 1})`));
   if (!data.ok) throw new Error(data.error || 'Không lấy được danh sách nhân viên.');
   employees = data.employees.map(e => ({
     maNV: e.maNV, hoTen: e.hoTen, descriptor: new Float32Array(e.descriptor)
@@ -429,10 +434,23 @@ async function khoiDongApp() {
     capNhatTienDo(5, 'Đang khởi động...');
     await dangKyServiceWorker();
     await loadModels();
-    capNhatTienDo(85, 'Đang tải danh sách địa điểm & cấu hình...');
-    await fetchSites();
-    capNhatTienDo(95, 'Đang tải danh sách nhân viên...');
-    await fetchEmployees();
+    capNhatTienDo(80, 'Đang kết nối máy chủ để tải dữ liệu...');
+    // Apps Script có thể mất vài giây (cold start) để phản hồi. Nhích % dần 80->92
+    // trong lúc chờ để thanh tiến trình không đứng yên (tránh cảm giác app bị đơ).
+    let tienDoGia = 80;
+    const bomTienDo = setInterval(() => {
+      if (tienDoGia < 92) {
+        tienDoGia++;
+        loadingRing.style.strokeDashoffset = String(LOADING_RING_LEN * (1 - tienDoGia / 100));
+        loadingPct.textContent = tienDoGia + '%';
+      }
+    }, 300);
+    try {
+      // Gọi song song 2 API thay vì tuần tự để giảm gần nửa thời gian chờ mạng.
+      await Promise.all([fetchSites(), fetchEmployees()]);
+    } finally {
+      clearInterval(bomTienDo);
+    }
     capNhatTienDo(100, 'Hoàn tất!');
     const loadingOverlay = document.getElementById('loading-overlay');
     setTimeout(() => {
