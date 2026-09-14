@@ -72,7 +72,7 @@
   .report-link-bar a { font-size: 13px; font-weight: 600; }
   .container { max-width: 480px; margin: 0 auto; padding: 16px; }
   .card {
-    background: var(--surface); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    background: var(--surface); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
     border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px;
     box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
   }
@@ -591,7 +591,9 @@ function chupAnhTuVideo(videoEl) {
 document.getElementById('ci-start').addEventListener('click', async () => {
   setStatus(ciStatus, 'info', 'Đang bật camera...');
   try {
-    ciStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    // Giới hạn độ phân giải camera (không cần full-HD để nhận diện khuôn mặt) - giúp
+    // đỡ tốn CPU cho mỗi khung hình face-api xử lý, đặc biệt trên điện thoại đời cũ.
+    ciStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } });
   } catch (e) {
     setStatus(ciStatus, 'err', 'Không mở được camera: ' + e.message + '. Hãy vào cài đặt trình duyệt cho phép trang này dùng camera rồi thử lại.');
     return;
@@ -818,7 +820,7 @@ document.getElementById('reg-start').addEventListener('click', async () => {
   setStatus(regStatus, 'info', 'Đang bật camera...');
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } });
   } catch (e) {
     setStatus(regStatus, 'err', 'Không mở được camera: ' + e.message + '. Hãy vào cài đặt trình duyệt cho phép trang này dùng camera rồi thử lại.');
     return;
