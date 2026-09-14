@@ -377,17 +377,45 @@ async function loadModels() {
   modelsReady = true;
 }
 
+/**
+ * Gọi fetch + parse JSON, TỰ ĐỘNG THỬ LẠI vài lần nếu lỗi (mất mạng, hoặc Google Apps
+ * Script thỉnh thoảng trả về trang lỗi HTML thay vì JSON - gây lỗi "Unexpected token '<'").
+ * Không tự thử lại lỗi nghiệp vụ thật (data.ok === false), chỉ thử lại lỗi MẠNG/ĐỊNH DẠNG,
+ * để không che giấu lỗi thật (ví dụ token sai) bằng cách thử lại vô ích.
+ */
+async function fetchJsonThuLai_(url, soLanThuToiDa, onDangThuLai) {
+  let loiCuoi;
+  for (let lan = 1; lan <= soLanThuToiDa; lan++) {
+    try {
+      const res = await fetch(url);
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (eParse) {
+        throw new Error('Máy chủ trả về dữ liệu không hợp lệ (có thể do Google Apps Script quá tải tạm thời).');
+      }
+    } catch (e) {
+      loiCuoi = e;
+      if (lan < soLanThuToiDa) {
+        if (onDangThuLai) onDangThuLai(lan, soLanThuToiDa);
+        await new Promise(r => setTimeout(r, lan * 1200)); // đợi tăng dần: 1.2s, 2.4s...
+      }
+    }
+  }
+  throw loiCuoi;
+}
+
 async function fetchSites() {
-  const res = await fetch(CONFIG.WEB_APP_URL + '?action=listSites&token=' + encodeURIComponent(CONFIG.APP_TOKEN));
-  const data = await res.json();
+  const url = CONFIG.WEB_APP_URL + '?action=listSites&token=' + encodeURIComponent(CONFIG.APP_TOKEN);
+  const data = await fetchJsonThuLai_(url, 3, (lan, tong) => capNhatTienDo(85, `Đang tải danh sách địa điểm & cấu hình... (thử lại lần ${lan}/${tong - 1})`));
   if (!data.ok) throw new Error(data.error || 'Không lấy được danh sách địa điểm.');
   SITES = data.sites || [];
   if (data.nguongNhanDien) FACE_MATCH_THRESHOLD = Number(data.nguongNhanDien);
 }
 
 async function fetchEmployees() {
-  const res = await fetch(CONFIG.WEB_APP_URL + '?action=listEmployees&token=' + encodeURIComponent(CONFIG.APP_TOKEN));
-  const data = await res.json();
+  const url = CONFIG.WEB_APP_URL + '?action=listEmployees&token=' + encodeURIComponent(CONFIG.APP_TOKEN);
+  const data = await fetchJsonThuLai_(url, 3, (lan, tong) => capNhatTienDo(95, `Đang tải danh sách nhân viên... (thử lại lần ${lan}/${tong - 1})`));
   if (!data.ok) throw new Error(data.error || 'Không lấy được danh sách nhân viên.');
   employees = data.employees.map(e => ({
     maNV: e.maNV, hoTen: e.hoTen, descriptor: new Float32Array(e.descriptor)
