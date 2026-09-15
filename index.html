@@ -439,7 +439,7 @@ async function khoiDongApp() {
     // trong lúc chờ để thanh tiến trình không đứng yên (tránh cảm giác app bị đơ).
     let tienDoGia = 80;
     const bomTienDo = setInterval(() => {
-      if (tienDoGia < 92) {
+      if (tienDoGia < 99) {
         tienDoGia++;
         loadingRing.style.strokeDashoffset = String(LOADING_RING_LEN * (1 - tienDoGia / 100));
         loadingPct.textContent = tienDoGia + '%';
