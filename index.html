@@ -252,6 +252,30 @@
       </div>
       <button id="ci-retry" class="secondary">Chụp lại</button>
     </div>
+
+    <div id="ci-done" class="card hidden" style="text-align:center;">
+      <div style="font-size:44px; line-height:1;">✅</div>
+      <div class="match-box"><div class="name" id="ci-done-ten">-</div><div class="conf" id="ci-done-chitiet">-</div></div>
+      <div id="ci-done-tre" class="status warn hidden"></div>
+    </div>
+
+    <div id="yc-goi-y" class="card hidden">
+      <div class="small">Quét nhiều lần vẫn không được? Bạn có thể gửi yêu cầu để quản lý duyệt công. Lượt này chỉ được tính sau khi quản lý duyệt.</div>
+      <button id="yc-mo" class="secondary">Gửi yêu cầu duyệt công</button>
+    </div>
+    <div id="yc-card" class="card hidden">
+      <label for="yc-manv">Mã nhân viên của bạn</label>
+      <input type="text" id="yc-manv" placeholder="VD: NV001" autocomplete="off">
+      <label for="yc-lydo">Lý do</label>
+      <input type="text" id="yc-lydo" placeholder="VD: Camera điện thoại bị mờ, không nhận diện được" maxlength="200">
+      <div class="small" style="margin-top:8px;">Ứng dụng sẽ gửi kèm 1 ảnh chụp từ camera và vị trí GPS hiện tại để quản lý đối chiếu.</div>
+      <div class="row">
+        <button id="yc-vao" class="success">Yêu cầu chấm VÀO</button>
+        <button id="yc-ra" class="danger">Yêu cầu chấm RA</button>
+      </div>
+      <button id="yc-dong" class="secondary">Đóng</button>
+      <div id="yc-status" class="status hidden"></div>
+    </div>
   </div>
 
   <!-- ================= ĐĂNG KÝ ================= -->
@@ -259,8 +283,8 @@
     <div class="card" id="reg-pin-card">
       <label>Tên quản lý</label>
       <input type="text" id="reg-ten-quanly" placeholder="VD: Admin">
-      <label>Mã PIN quản trị</label>
-      <input type="password" id="reg-pin" placeholder="Nhập mã PIN để mở khóa đăng ký">
+      <label>Mật khẩu quản lý</label>
+      <input type="password" id="reg-pin" placeholder="Nhập mật khẩu để mở khóa đăng ký">
       <button id="reg-unlock">Mở khóa</button>
       <div id="reg-pin-status" class="status hidden"></div>
     </div>
@@ -279,6 +303,8 @@
       <div id="reg-hoten-wrap">
         <label>Họ và tên</label>
         <input type="text" id="reg-hoten" placeholder="VD: Nguyễn Văn A">
+        <label>Bộ phận (không bắt buộc)</label>
+        <input type="text" id="reg-bophan" placeholder="VD: Giao hàng, Kho, Văn phòng">
       </div>
 
       <div class="note-box" id="reg-dongy-wrap">
@@ -581,6 +607,8 @@ let ciStream = null;
 let ciMatched = null; // {maNV, hoTen}
 let ciGpsData = null;
 let ciDangXuLy = false;
+let ciDescriptor = null; // đặc trưng khuôn mặt vừa quét, gửi lên để máy chủ tự đối chiếu lại
+let ciSoLanThatBai = 0; // đếm lần quét thất bại để gợi ý gửi yêu cầu duyệt
 let ciAnhBangChung = null; // ảnh JPEG base64 chụp lúc quét mặt, gửi kèm khi chấm công thành công
 
 /** Bọc getCurrentPosition thành Promise cho dễ dùng với async/await. */
@@ -622,6 +650,11 @@ document.getElementById('ci-start').addEventListener('click', async () => {
   setStatus(ciStatus, 'ok', 'Camera đã bật. Đưa mặt vào giữa khung hình rồi bấm "Chụp & nhận diện".');
 });
 
+function ghiNhanThatBai() {
+  ciSoLanThatBai++;
+  if (ciSoLanThatBai >= 2) document.getElementById('yc-goi-y').classList.remove('hidden');
+}
+
 function baoCanhBaoKhongKhop(lyDo, khoangCachToiThieu) {
   // Gửi ngầm (không chờ, không chặn UI) để quản lý có dữ liệu phát hiện gian lận -
   // ví dụ nhiều lần thử không khớp mặt liên tiếp tại 1 thiết bị.
@@ -643,6 +676,7 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
   const btnCapture = document.getElementById('ci-capture');
   const challengeEl = document.getElementById('ci-challenge');
   btnCapture.disabled = true;
+  document.getElementById('ci-done').classList.add('hidden');
   try {
     const thuThach = chonThuThachNgauNhien();
     setStatus(challengeEl, 'info', thuThach.huongDan);
@@ -652,6 +686,7 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
     const live = await kiemTraLivenessTheoThuThach(ciVideo, thuThach.id);
     if (!live.hopLe) {
       setStatus(ciStatus, 'warn', live.lyDo);
+      ghiNhanThatBai();
       return;
     }
     challengeEl.classList.add('hidden');
@@ -661,6 +696,7 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
       .withFaceLandmarks().withFaceDescriptor();
     if (!detection) {
       setStatus(ciStatus, 'err', 'Không phát hiện khuôn mặt. Vui lòng thử lại, đảm bảo đủ sáng.');
+      ghiNhanThatBai();
       return;
     }
     if (employees.length === 0) {
@@ -675,9 +711,11 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
     if (best.dist > FACE_MATCH_THRESHOLD) {
       setStatus(ciStatus, 'err', 'Không nhận diện được nhân viên phù hợp. Vui lòng thử lại hoặc liên hệ quản lý.');
       baoCanhBaoKhongKhop('Khong khop khuon mat nhan vien nao luc cham cong', best.dist);
+      ghiNhanThatBai();
       return;
     }
     ciMatched = best.emp;
+    ciDescriptor = Array.from(detection.descriptor);
     const conf = Math.max(0, Math.round((1 - best.dist / FACE_MATCH_THRESHOLD) * 100));
     document.getElementById('ci-name').textContent = ciMatched.hoTen + ' (' + ciMatched.maNV + ')';
     document.getElementById('ci-conf').textContent = 'Độ tin cậy ước tính: ' + conf + '%';
@@ -726,7 +764,7 @@ document.getElementById('ci-capture').addEventListener('click', async () => {
 document.getElementById('ci-retry').addEventListener('click', () => {
   document.getElementById('ci-match').classList.add('hidden');
   document.getElementById('ci-challenge').classList.add('hidden');
-  ciMatched = null; ciGpsData = null; ciAnhBangChung = null;
+  ciMatched = null; ciGpsData = null; ciAnhBangChung = null; ciDescriptor = null;
   document.getElementById('ci-in').disabled = true;
   document.getElementById('ci-out').disabled = true;
 });
@@ -744,6 +782,7 @@ async function submitCheckin(loai) {
         action: 'checkin',
         maNV: ciMatched.maNV,
         hoTen: ciMatched.hoTen,
+        descriptor: ciDescriptor,
         loaiChamCong: loai,
         lat: ciGpsData.lat,
         lng: ciGpsData.lng,
@@ -757,9 +796,17 @@ async function submitCheckin(loai) {
     });
     const data = await res.json();
     if (data.ok) {
-      setStatus(ciStatus, 'ok', 'Chấm công "' + loai + '" thành công lúc ' + new Date(data.thoiGian).toLocaleString('vi-VN') + '.');
+      ciSoLanThatBai = 0;
+      ciStatus.classList.add('hidden');
+      document.getElementById('yc-goi-y').classList.add('hidden');
+      document.getElementById('ci-done-ten').textContent = data.hoTen || '';
+      document.getElementById('ci-done-chitiet').textContent = 'Đã chấm công ' + loai.toUpperCase() + ' lúc ' + (data.gio || new Date(data.thoiGian).toLocaleTimeString('vi-VN')) + (data.diaDiem ? ' tại ' + data.diaDiem : '');
+      const treEl = document.getElementById('ci-done-tre');
+      if (data.trePhut > 0) setStatus(treEl, 'warn', 'Bạn vào trễ ' + data.trePhut + ' phút so với giờ quy định.'); else treEl.classList.add('hidden');
+      document.getElementById('ci-done').classList.remove('hidden');
     } else {
       setStatus(ciStatus, 'err', 'Lỗi: ' + data.error);
+      ghiNhanThatBai();
     }
   } catch (e) {
     setStatus(ciStatus, 'err', 'Không gửi được dữ liệu: ' + e.message);
@@ -767,41 +814,82 @@ async function submitCheckin(loai) {
   document.getElementById('ci-match').classList.add('hidden');
   btn.textContent = loai === 'Vào' ? 'Chấm công VÀO' : 'Chấm công RA';
   btn.disabled = true;
-  ciMatched = null; ciGpsData = null; ciAnhBangChung = null;
+  ciMatched = null; ciGpsData = null; ciAnhBangChung = null; ciDescriptor = null;
 }
 document.getElementById('ci-in').addEventListener('click', () => submitCheckin('Vào'));
 document.getElementById('ci-out').addEventListener('click', () => submitCheckin('Ra'));
 
+/* ================= GỬI YÊU CẦU DUYỆT CÔNG (khi nhận diện thất bại) ================= */
+document.getElementById('yc-mo').addEventListener('click', () => {
+  document.getElementById('yc-card').classList.remove('hidden');
+  document.getElementById('yc-status').classList.add('hidden');
+});
+document.getElementById('yc-dong').addEventListener('click', () => document.getElementById('yc-card').classList.add('hidden'));
+
+async function guiYeuCauDuyet(loai) {
+  const st = document.getElementById('yc-status');
+  const maNV = document.getElementById('yc-manv').value.trim();
+  const lyDo = document.getElementById('yc-lydo').value.trim();
+  if (!maNV || !lyDo) { setStatus(st, 'err', 'Vui lòng nhập mã nhân viên và lý do.'); return; }
+  const nutVao = document.getElementById('yc-vao'), nutRa = document.getElementById('yc-ra');
+  nutVao.disabled = true; nutRa.disabled = true;
+  try {
+    setStatus(st, 'info', 'Đang lấy vị trí GPS...');
+    let lat = null, lng = null;
+    try { const vt = await layViTriGPS(); lat = vt.coords.latitude; lng = vt.coords.longitude; } catch (e) { /* vẫn gửi, quản lý sẽ thấy "không có GPS" */ }
+    const anh = ciStream ? chupAnhTuVideo(ciVideo) : null;
+    setStatus(st, 'info', 'Đang gửi yêu cầu...');
+    const res = await fetch(CONFIG.WEB_APP_URL, {
+      method: 'POST',
+      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'yeuCauDuyet', maNV, loaiChamCong: loai, lyDo, lat, lng, anhBase64: anh || undefined })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setStatus(st, 'ok', 'Đã gửi yêu cầu chấm ' + loai.toUpperCase() + ' lúc ' + data.gio + ' cho ' + data.hoTen + '. Hãy báo quản lý để được duyệt.');
+      document.getElementById('yc-lydo').value = '';
+      ciSoLanThatBai = 0;
+    } else {
+      setStatus(st, 'err', 'Lỗi: ' + data.error);
+    }
+  } catch (e) {
+    setStatus(st, 'err', 'Không gửi được yêu cầu: ' + e.message);
+  }
+  nutVao.disabled = false; nutRa.disabled = false;
+}
+document.getElementById('yc-vao').addEventListener('click', () => guiYeuCauDuyet('Vào'));
+document.getElementById('yc-ra').addEventListener('click', () => guiYeuCauDuyet('Ra'));
+
 /* ================= ĐĂNG KÝ / BỔ SUNG MẪU NHÂN VIÊN ================= */
-let regAdminPin = null; // PIN chỉ giữ trong bộ nhớ tạm sau khi server xác thực đúng, không lưu ở đâu khác
-let regTenQuanLy = null; // tên tài khoản quản lý đã xác thực, gửi kèm mọi thao tác để truy vết "ai" thao tác
+let regPhien = null; // mã phiên đăng nhập do máy chủ cấp (hết hạn sau 4 giờ) - không giữ mật khẩu trong trình duyệt
 let regMode = 'new'; // 'new' = đăng ký mới (5 mẫu) | 'add' = bổ sung mẫu (2 mẫu) cho NV đã có
 
 document.getElementById('reg-unlock').addEventListener('click', async () => {
   const pinStatus = document.getElementById('reg-pin-status');
   const tenQuanLy = document.getElementById('reg-ten-quanly').value.trim();
   const pin = document.getElementById('reg-pin').value;
-  if (!tenQuanLy || !pin) { alert('Vui lòng nhập tên quản lý và mã PIN.'); return; }
+  if (!tenQuanLy || !pin) { setStatus(pinStatus, 'err', 'Vui lòng nhập tên quản lý và mật khẩu.'); return; }
   setStatus(pinStatus, 'info', 'Đang kiểm tra...');
   try {
     const res = await fetch(CONFIG.WEB_APP_URL, {
       method: 'POST',
-      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'verifyPin', tenQuanLy, pin })
+      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'dangNhap', tenQuanLy, pin })
     });
     const data = await res.json();
     if (data.ok && data.valid) {
-      regAdminPin = pin;
-      regTenQuanLy = tenQuanLy;
+      regPhien = data.phien;
+      document.getElementById('reg-pin').value = '';
+      pinStatus.classList.add('hidden');
       document.getElementById('reg-pin-card').classList.add('hidden');
       document.getElementById('reg-mode-card').classList.remove('hidden');
-      chonCheDoDangKy('new');
+      if (regDescriptors.length > 0) document.getElementById('reg-form-card').classList.remove('hidden'); // đăng nhập lại giữa chừng: giữ mẫu đã chụp
+      else chonCheDoDangKy('new');
     } else if (data.khoa) {
       setStatus(pinStatus, 'err', data.error || 'Đã khóa tạm thời do nhập sai nhiều lần.');
     } else {
-      setStatus(pinStatus, 'err', data.error || 'Sai tên quản lý hoặc mã PIN.');
+      setStatus(pinStatus, 'err', data.error || 'Sai tên quản lý hoặc mật khẩu.');
     }
   } catch (e) {
-    setStatus(pinStatus, 'err', 'Không kiểm tra được PIN: ' + e.message);
+    setStatus(pinStatus, 'err', 'Không đăng nhập được: ' + e.message);
   }
 });
 
@@ -853,7 +941,7 @@ document.getElementById('reg-capture').addEventListener('click', async () => {
   const maNV = document.getElementById('reg-manv').value.trim();
   const hoTen = document.getElementById('reg-hoten').value.trim();
   if (!maNV || (regMode === 'new' && !hoTen)) {
-    alert('Vui lòng nhập đầy đủ thông tin trước.');
+    setStatus(regStatus, 'err', 'Vui lòng nhập mã nhân viên' + (regMode === 'new' ? ' và họ tên' : '') + ' trước khi chụp.');
     return;
   }
   const soMauCanThiet = regMode === 'new' ? 5 : 2;
@@ -893,13 +981,12 @@ document.getElementById('reg-save').addEventListener('click', async () => {
     const body = {
       token: CONFIG.APP_TOKEN,
       action: regMode === 'new' ? 'register' : 'addSample',
-      tenQuanLy: regTenQuanLy,
-      adminPin: regAdminPin,
+      phien: regPhien,
       maNV,
       descriptors: regDescriptors,
       thietBi: navigator.userAgent
     };
-    if (regMode === 'new') { body.hoTen = hoTen; body.dongY = true; }
+    if (regMode === 'new') { body.hoTen = hoTen; body.boPhan = document.getElementById('reg-bophan').value.trim(); body.dongY = true; }
 
     const res = await fetch(CONFIG.WEB_APP_URL, { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
@@ -912,8 +999,15 @@ document.getElementById('reg-save').addEventListener('click', async () => {
       document.getElementById('reg-capture').disabled = false;
       document.getElementById('reg-manv').value = '';
       document.getElementById('reg-hoten').value = '';
+      document.getElementById('reg-bophan').value = '';
       document.getElementById('reg-dongy').checked = false;
       await fetchEmployees(); // cập nhật lại danh sách nhân viên/khuôn mặt ngay để dùng được luôn
+    } else if (data.hetPhien) {
+      regPhien = null;
+      document.getElementById('reg-mode-card').classList.add('hidden');
+      document.getElementById('reg-form-card').classList.add('hidden');
+      document.getElementById('reg-pin-card').classList.remove('hidden');
+      setStatus(document.getElementById('reg-pin-status'), 'warn', 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại rồi bấm Lưu (các mẫu đã chụp vẫn được giữ).');
     } else {
       setStatus(regStatus, 'err', 'Lỗi: ' + data.error);
     }
