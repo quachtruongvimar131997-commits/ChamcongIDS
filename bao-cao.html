@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self';">
 <title>Báo cáo chấm công - IDS</title>
 <script src="config.js"></script>
 <style>
@@ -11,14 +11,13 @@
     color-scheme: dark;
     --bg: #060a14;
     --primary: #3b82f6;
-    --primary-2: #8b5cf6;
     --primary-grad: linear-gradient(135deg, #3b82f6 0%, #6366f1 55%, #8b5cf6 100%);
-    --success: #1fd8a4;
-    --success-2: #12b88a;
-    --danger: #fb4570;
-    --danger-2: #e0295a;
+    --good: #1fd8a4;
     --warn: #f7b955;
+    --bad: #fb4570;
+    --idle: #5b6478;
     --surface: rgba(255,255,255,.045);
+    --surface-2: rgba(255,255,255,.08);
     --border: rgba(255,255,255,.09);
     --border-strong: rgba(255,255,255,.18);
     --text: #eef2f9;
@@ -32,92 +31,149 @@
     background:
       radial-gradient(900px 500px at 15% -10%, rgba(59,130,246,.22), transparent 60%),
       radial-gradient(700px 500px at 100% 10%, rgba(139,92,246,.16), transparent 55%),
-      radial-gradient(650px 420px at 50% 100%, rgba(31,216,164,.07), transparent 60%),
       var(--bg);
     background-attachment: fixed;
-    color: var(--text); padding-bottom: 40px; min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
+    color: var(--text); padding-bottom: 40px; min-height: 100vh; -webkit-font-smoothing: antialiased;
   }
   a { color: #93c5fd; text-decoration: none; }
   a:hover { text-decoration: underline; }
-  header { position: relative; padding: 22px 20px; text-align: center; overflow: hidden; }
+  header { position: relative; padding: 18px 16px; }
   header::after {
     content: ''; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
-    width: 140px; height: 3px; border-radius: 3px;
-    background: var(--primary-grad); box-shadow: 0 0 16px rgba(99,102,241,.7);
+    width: 140px; height: 3px; border-radius: 3px; background: var(--primary-grad); box-shadow: 0 0 16px rgba(99,102,241,.7);
   }
-  .header-brand { display: flex; align-items: center; justify-content: center; gap: 14px; max-width: 900px; margin: 0 auto; }
-  .header-brand div { text-align: left; }
-  .header-logo {
-    height: 46px; width: 46px; object-fit: contain; background: #fff; border-radius: 12px; padding: 4px; flex-shrink: 0;
-    box-shadow: 0 0 0 1px rgba(255,255,255,.5), 0 6px 20px rgba(59,130,246,.35);
-  }
-  header h1 {
-    margin: 0; font-size: 19px; font-weight: 700; letter-spacing: .2px;
-    background: linear-gradient(135deg, #fff, #c7d2fe); -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  header p { margin: 5px 0 0; font-size: 12.5px; color: var(--text-dim); letter-spacing: .2px; }
-  .back-link { display: block; text-align: center; padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
-  .back-link a { font-weight: 600; }
-  .container { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .header-brand { display: flex; align-items: center; gap: 14px; max-width: 1100px; margin: 0 auto; }
+  .header-brand .ten { flex: 1; min-width: 0; }
+  .header-logo { height: 44px; width: 44px; object-fit: contain; background: #fff; border-radius: 12px; padding: 4px; flex-shrink: 0; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+  header p { margin: 3px 0 0; font-size: 12.5px; color: var(--text-dim); }
+  .user-box { text-align: right; font-size: 12.5px; color: var(--text-dim); }
+  .user-box b { color: var(--text); display: block; font-size: 13.5px; }
+  .user-box button { margin: 4px 0 0 6px; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
   .card {
-    background: var(--surface); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-    border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.3);
   }
-  label { display: block; font-size: 12.5px; color: var(--text-dim); margin: 12px 0 6px; letter-spacing: .2px; }
-  input[type=text], input[type=password], input[type=date], select {
-    width: 100%; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
-    font-size: 15px; background: rgba(255,255,255,.04); color: var(--text);
-    color-scheme: dark;
+  .card h3 { margin: 0 0 4px; font-size: 16px; }
+  .card .sub { font-size: 12.5px; color: var(--text-dim); margin: 0 0 12px; line-height: 1.5; }
+  label { display: block; font-size: 12.5px; color: var(--text-dim); margin: 12px 0 6px; }
+  input[type=text], input[type=password], input[type=date], input[type=datetime-local], select {
+    width: 100%; padding: 11px 13px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    font-size: 15px; background: rgba(255,255,255,.04); color: var(--text); color-scheme: dark; font-family: inherit;
   }
+  select option { color: #111; }
   input::placeholder { color: rgba(255,255,255,.32); }
-  input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
+  input:focus, select:focus, button:focus-visible { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,.3); }
   button {
-    padding: 14px; border: none; border-radius: var(--radius-sm); font-size: 15px;
-    font-weight: 600; margin-top: 10px; cursor: pointer; color: #fff; background: var(--primary-grad);
-    box-shadow: 0 8px 24px rgba(59,130,246,.35); transition: transform .15s ease, box-shadow .15s ease; letter-spacing: .2px;
+    padding: 12px 16px; border: none; border-radius: var(--radius-sm); font-size: 14.5px; font-weight: 600; margin-top: 10px;
+    cursor: pointer; color: #fff; background: var(--primary-grad); font-family: inherit;
   }
-  button:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(59,130,246,.45); }
-  button:active { transform: translateY(0) scale(.98); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
   button.full { width: 100%; }
-  button.secondary { background: rgba(255,255,255,.08); box-shadow: none; border: 1px solid var(--border-strong); }
-  .status { padding: 11px 14px; border-radius: var(--radius-sm); font-size: 13.5px; margin-top: 10px; border: 1px solid transparent; }
+  button.secondary { background: var(--surface-2); border: 1px solid var(--border-strong); }
+  button.sm { padding: 7px 11px; font-size: 12.5px; margin-top: 0; border-radius: 9px; }
+  button.good { background: #12a37c; }
+  button.bad { background: #c9305a; }
+  .status { padding: 11px 14px; border-radius: var(--radius-sm); font-size: 13.5px; margin-top: 10px; border: 1px solid transparent; line-height: 1.5; }
   .status.info { background: rgba(59,130,246,.12); color: #93c5fd; border-color: rgba(59,130,246,.3); }
   .status.ok { background: rgba(31,216,164,.12); color: #6ee7c2; border-color: rgba(31,216,164,.3); }
   .status.err { background: rgba(251,69,112,.12); color: #fca5b8; border-color: rgba(251,69,112,.3); }
   .status.warn { background: rgba(247,185,85,.12); color: #fcd58a; border-color: rgba(247,185,85,.3); }
   .hidden { display: none !important; }
-  .row { display: flex; gap: 10px; }
-  .row > * { flex: 1; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 130px; }
   .small { font-size: 12px; color: var(--text-dim); }
+  .tinh { font-variant-numeric: tabular-nums; }
 
-  .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 4px; }
-  .stat-card {
-    background: var(--surface); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-    border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04); text-align: center;
+  /* Thanh lọc + tab */
+  .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .filter-bar > div { flex: 1; min-width: 130px; }
+  .filter-bar label { margin-top: 0; }
+  .filter-bar button { margin-top: 0; flex: 0 0 auto; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px; }
+  .tab {
+    padding: 10px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim);
+    font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap; margin: 0;
   }
-  .stat-card .so {
-    font-size: 24px; font-weight: 700;
-    background: linear-gradient(135deg, #fff, #c7d2fe); -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  .stat-card.warn .so { background: none; -webkit-text-fill-color: initial; color: var(--warn); }
-  .stat-card.danger .so { background: none; -webkit-text-fill-color: initial; color: var(--danger); }
-  .stat-card .nhan { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .tab.active { background: rgba(59,130,246,.2); color: #fff; border-color: rgba(99,102,241,.6); }
+  .tab .dem { display: inline-block; min-width: 18px; padding: 1px 6px; margin-left: 5px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 11px; text-align: center; }
 
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+  /* Thẻ số liệu */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; }
+  .tile .so { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile .so small { font-size: 14px; color: var(--text-dim); font-weight: 500; }
+  .tile .nhan { font-size: 12.5px; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
+  .cham { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+  .cham.good { background: var(--good); } .cham.warn { background: var(--warn); } .cham.bad { background: var(--bad); } .cham.idle { background: var(--idle); }
+
+  /* Thanh tỉ lệ hôm nay */
+  .thanh { display: flex; gap: 2px; height: 18px; border-radius: 6px; overflow: hidden; margin: 6px 0 10px; }
+  .thanh > span { display: block; min-width: 0; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-dim); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* Bảng */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
-  th { color: var(--text-dim); font-weight: 600; }
-  td { color: var(--text); }
-  .bar-track { background: rgba(255,255,255,.08); border-radius: 6px; height: 10px; width: 100px; overflow: hidden; display: inline-block; vertical-align: middle; }
-  .bar-fill { background: var(--primary-grad); height: 100%; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  th { color: var(--text-dim); font-weight: 600; background: #0d1322; position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.so, th.so { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
   .badge.ok { background: rgba(31,216,164,.15); color: #6ee7c2; }
   .badge.err { background: rgba(251,69,112,.15); color: #fca5b8; }
   .badge.warn { background: rgba(247,185,85,.15); color: #fcd58a; }
-  a.anh-link { font-size: 12px; }
+  .badge.idle { background: rgba(255,255,255,.08); color: var(--text-dim); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip { padding: 6px 11px; font-size: 12.5px; border-radius: 999px; margin: 0; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .chip.active { background: rgba(59,130,246,.2); color: #fff; border-color: rgba(99,102,241,.6); }
+  .bar-track { background: rgba(255,255,255,.08); border-radius: 4px; height: 8px; width: 110px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  .bar-fill { background: var(--warn); height: 100%; border-radius: 4px; }
+
+  /* Bảng công */
+  #bang-cong th, #bang-cong td { padding: 5px 6px; text-align: center; font-size: 11.5px; border-right: 1px solid var(--border); }
+  #bang-cong th.co-dinh, #bang-cong td.co-dinh { position: sticky; left: 0; background: #0d1322; text-align: left; z-index: 2; min-width: 130px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+  #bang-cong th.co-dinh { z-index: 3; }
+  #bang-cong td.o { line-height: 1.35; font-variant-numeric: tabular-nums; min-width: 46px; }
+  #bang-cong td.o.tre { background: rgba(247,185,85,.16); }
+  #bang-cong td.o.vang { background: rgba(251,69,112,.16); color: #fca5b8; font-weight: 700; }
+  #bang-cong td.o.thieu { background: rgba(139,92,246,.18); }
+  #bang-cong th.nghi, #bang-cong td.nghi { background: rgba(255,255,255,.035); color: var(--text-dim); }
+  #bang-cong td.tong { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* Biểu đồ */
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; }
+  .chart .cot { cursor: default; }
+  .chart .vung:hover + .nen, .chart .vung:focus + .nen { opacity: 1; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: #131a2c; border: 1px solid var(--border-strong); border-radius: 10px;
+    padding: 8px 10px; font-size: 12.5px; line-height: 1.6; box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 5; white-space: nowrap;
+  }
+  .tooltip b { display: block; margin-bottom: 2px; }
+
+  .yc { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 10px; }
+  .yc .dau { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; justify-content: space-between; }
+  .yc .nut { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .yc .nut input { flex: 1; min-width: 160px; padding: 8px 11px; font-size: 13.5px; }
+
+  @media print {
+    body { background: #fff; color: #000; padding: 0; }
+    header, .tabs, .filter-card, .khong-in, .user-box, #login-card { display: none !important; }
+    .container { max-width: none; padding: 0; }
+    .card { border: none; box-shadow: none; padding: 0; background: none; }
+    .view { display: none !important; }
+    #view-bangcong { display: block !important; }
+    .table-wrap { overflow: visible; border: none; }
+    #bang-cong th, #bang-cong td { color: #000 !important; background: #fff !important; border: 1px solid #999; font-size: 8px; padding: 2px; position: static !important; }
+    #bang-cong td.o.vang { background: #f6c6cf !important; } #bang-cong td.o.tre { background: #fde6b8 !important; }
+    #bang-cong th.nghi, #bang-cong td.nghi { background: #e8e8e8 !important; }
+    .in-tieu-de { display: block !important; color: #000; margin-bottom: 8px; }
+    @page { size: A4 landscape; margin: 8mm; }
+  }
+  .in-tieu-de { display: none; }
 </style>
 </head>
 <body>
@@ -125,311 +181,760 @@
 <header>
   <div class="header-brand">
     <img src="Logo_IDS.jpg" alt="Logo IDS" class="header-logo">
-    <div>
+    <div class="ten">
       <h1>Báo cáo chấm công</h1>
-      <p>Công ty CP DV PP Tổng Hợp Quốc Tế (IDS)</p>
+      <p><a href="index.html">← Về trang chấm công</a></p>
+    </div>
+    <div class="user-box hidden" id="user-box">
+      <b id="user-ten"></b><span id="user-quyen"></span><br>
+      <button class="secondary sm" id="btn-doipin">Đổi mật khẩu</button>
+      <button class="secondary sm" id="btn-dangxuat">Đăng xuất</button>
     </div>
   </div>
 </header>
-<div class="back-link"><a href="index.html">← Quay lại trang chấm công</a></div>
 
 <div class="container">
 
-  <div class="card" id="pin-card">
-    <label>Tên quản lý</label>
-    <input type="text" id="ten-quanly-input" placeholder="VD: Admin">
-    <label>Mã PIN quản trị</label>
-    <input type="password" id="pin-input" placeholder="Nhập mã PIN để xem báo cáo">
-    <button class="full" id="pin-unlock">Mở khóa</button>
-    <div id="pin-status" class="status hidden"></div>
+  <!-- ĐĂNG NHẬP -->
+  <div class="card" id="login-card" style="max-width:420px; margin:20px auto;">
+    <h3>Đăng nhập quản lý</h3>
+    <p class="sub">Báo cáo chỉ dành cho quản lý và nhân sự.</p>
+    <label for="login-ten">Tên quản lý</label>
+    <input type="text" id="login-ten" autocomplete="username" placeholder="VD: Admin">
+    <label for="login-pin">Mật khẩu</label>
+    <input type="password" id="login-pin" autocomplete="current-password" placeholder="Nhập mật khẩu">
+    <button class="full" id="login-btn">Đăng nhập</button>
+    <div id="login-status" class="status hidden"></div>
   </div>
 
-  <div id="report-area" class="hidden">
-    <div class="card">
-      <div class="row">
-        <div>
-          <label>Từ ngày</label>
-          <input type="date" id="tu-ngay">
-        </div>
-        <div>
-          <label>Đến ngày</label>
-          <input type="date" id="den-ngay">
-        </div>
-      </div>
-      <label>Lọc theo mã nhân viên (để trống = tất cả)</label>
-      <input type="text" id="loc-manv" placeholder="VD: NV001">
-      <button class="full" id="xem-bao-cao">Xem báo cáo</button>
-      <div id="report-status" class="status hidden"></div>
-    </div>
+  <div id="app" class="hidden">
 
-    <div class="card" id="tc-card">
-      <h3 style="margin-top:0;">Chấm công thủ công</h3>
-      <div class="small">Dùng khi nhận diện khuôn mặt thất bại (camera hỏng, thiết bị lỗi...). Bắt buộc ghi rõ lý do để lưu vết.</div>
+    <!-- ĐỔI MẬT KHẨU -->
+    <div class="card hidden" id="doipin-card">
+      <h3>Đổi mật khẩu</h3>
+      <p class="sub">Mật khẩu mới cần ít nhất 6 ký tự. Nên dùng cả chữ và số.</p>
       <div class="row">
+        <div><label for="dp-cu">Mật khẩu hiện tại</label><input type="password" id="dp-cu" autocomplete="current-password"></div>
+        <div><label for="dp-moi">Mật khẩu mới</label><input type="password" id="dp-moi" autocomplete="new-password"></div>
+      </div>
+      <button id="dp-luu">Lưu mật khẩu mới</button>
+      <button class="secondary" id="dp-huy">Đóng</button>
+      <div id="dp-status" class="status hidden"></div>
+    </div>
+    <div id="canh-bao-pin" class="status warn hidden khong-in" style="margin:0 0 14px;">Mật khẩu của bạn ngắn dưới 6 ký tự, dễ bị dò. Hãy bấm "Đổi mật khẩu" ở góc trên để đặt mật khẩu dài hơn.</div>
+
+    <div class="card filter-card">
+      <div class="filter-bar">
+        <div><label for="tu-ngay">Từ ngày</label><input type="date" id="tu-ngay"></div>
+        <div><label for="den-ngay">Đến ngày</label><input type="date" id="den-ngay"></div>
         <div>
-          <label>Mã nhân viên</label>
-          <input type="text" id="tc-manv" placeholder="VD: NV001">
-        </div>
-        <div>
-          <label>Loại</label>
-          <select id="tc-loai">
-            <option value="Vào">Vào</option>
-            <option value="Ra">Ra</option>
+          <label for="chon-nhanh">Chọn nhanh</label>
+          <select id="chon-nhanh">
+            <option value="thangNay">Tháng này</option>
+            <option value="thangTruoc">Tháng trước</option>
+            <option value="7ngay">7 ngày qua</option>
+            <option value="tuy">Tuỳ chọn</option>
           </select>
         </div>
+        <div>
+          <label for="loc-bophan">Bộ phận</label>
+          <select id="loc-bophan"><option value="">Tất cả</option></select>
+        </div>
+        <button id="tai-lai">Xem</button>
       </div>
-      <label>Lý do (bắt buộc)</label>
-      <input type="text" id="tc-lydo" placeholder="VD: Camera hỏng, quản lý xác nhận trực tiếp">
-      <button class="full" id="tc-ghinhan">Ghi nhận chấm công thủ công</button>
-      <div id="tc-status" class="status hidden"></div>
+      <div id="report-status" class="status hidden"></div>
+      <div class="small" id="cap-nhat" style="margin-top:10px;"></div>
     </div>
 
-    <div class="cards-grid" id="cards-grid"></div>
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-view="homnay">Hôm nay</button>
+      <button class="tab" data-view="thang">Tổng quan</button>
+      <button class="tab" data-view="bangcong">Bảng công</button>
+      <button class="tab" data-view="nhatky">Nhật ký</button>
+      <button class="tab" data-view="xuly">Cần xử lý<span class="dem hidden" id="dem-xuly"></span></button>
+      <button class="tab" data-view="nhanvien">Nhân viên</button>
+    </div>
 
-    <div class="card">
-      <div class="row" style="align-items:center;">
-        <h3 style="margin:0;">Tổng hợp theo nhân viên</h3>
-        <button id="xuat-csv-tonghop" class="secondary" style="margin-top:0; flex:0 0 auto; padding:9px 14px; font-size:13px;">⬇ Xuất CSV</button>
+    <!-- HÔM NAY -->
+    <div class="view" id="view-homnay">
+      <div class="tiles" id="hn-tiles"></div>
+      <div class="card">
+        <h3 id="hn-tieu-de">Tình hình hôm nay</h3>
+        <div class="thanh" id="hn-thanh"></div>
+        <div class="legend" id="hn-legend"></div>
       </div>
-      <div class="table-wrap">
-        <table id="table-tonghop">
-          <thead><tr><th>Mã NV</th><th>Họ tên</th><th>Giờ công</th><th>Đi trễ</th><th>Từ chối</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div class="card">
+        <h3>Danh sách nhân viên hôm nay</h3>
+        <div class="chips" id="hn-chips"></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Nhân viên</th><th>Vào</th><th>Ra</th><th>Trạng thái</th><th>Bộ phận</th></tr></thead><tbody id="hn-body"></tbody></table>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="row" style="align-items:center;">
-        <h3 style="margin:0;">Nhật ký chấm công chi tiết (mới nhất trước, tối đa 300 dòng)</h3>
-        <button id="xuat-csv-chitiet" class="secondary" style="margin-top:0; flex:0 0 auto; padding:9px 14px; font-size:13px;">⬇ Xuất CSV</button>
+    <!-- TỔNG QUAN -->
+    <div class="view hidden" id="view-thang">
+      <div class="tiles" id="th-tiles"></div>
+      <div class="card">
+        <h3>Chuyên cần theo ngày</h3>
+        <p class="sub">Số nhân viên mỗi ngày. Di chuột hoặc chạm vào cột để xem số cụ thể.</p>
+        <div class="legend" style="margin-bottom:8px;">
+          <span><i class="cham good"></i>Đúng giờ</span><span><i class="cham warn"></i>Đi trễ</span><span><i class="cham bad"></i>Vắng / không chấm</span>
+        </div>
+        <div class="chart" id="chart-ngay"></div>
       </div>
-      <div class="table-wrap">
-        <table id="table-chitiet">
-          <thead><tr><th>Thời gian</th><th>Mã NV</th><th>Họ tên</th><th>Loại</th><th>Xác thực</th><th>Địa điểm</th><th>Kết quả</th><th>Lý do</th><th>Ảnh</th><th>GPS</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div class="card">
+        <h3>Nhân viên đi trễ nhiều nhất</h3>
+        <p class="sub">Xếp theo số lần đi trễ trong khoảng ngày đang xem.</p>
+        <div class="table-wrap">
+          <table><thead><tr><th>Nhân viên</th><th>Bộ phận</th><th>Số lần trễ</th><th class="so">Tổng phút trễ</th></tr></thead><tbody id="th-tre"></tbody></table>
+        </div>
       </div>
     </div>
+
+    <!-- BẢNG CÔNG -->
+    <div class="view hidden" id="view-bangcong">
+      <div class="card">
+        <div class="in-tieu-de"><b>BẢNG CHẤM CÔNG - IDS</b> <span id="in-khoang"></span></div>
+        <div class="row khong-in" style="align-items:center; margin-bottom:10px;">
+          <div style="flex:2;">
+            <h3>Bảng công</h3>
+            <p class="sub" style="margin:0;" id="bc-chu-thich"></p>
+          </div>
+          <div style="flex:0 0 auto; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="sm" id="xuat-excel">⬇ Tải Excel</button>
+            <button class="secondary sm" id="in-pdf">🖨 In / lưu PDF</button>
+          </div>
+        </div>
+        <div class="legend khong-in" style="margin-bottom:10px;">
+          <span><i class="cham" style="background:rgba(247,185,85,.5)"></i>Đi trễ</span>
+          <span><i class="cham" style="background:rgba(251,69,112,.5)"></i>V = vắng / không chấm</span>
+          <span><i class="cham" style="background:rgba(139,92,246,.55)"></i>Thiếu chấm vào hoặc ra</span>
+          <span><i class="cham idle"></i>Ngày nghỉ</span>
+          <span>* = có lượt thủ công</span>
+        </div>
+        <div class="table-wrap"><table id="bang-cong"></table></div>
+      </div>
+    </div>
+
+    <!-- NHẬT KÝ -->
+    <div class="view hidden" id="view-nhatky">
+      <div class="card">
+        <div class="row" style="align-items:center; margin-bottom:10px;">
+          <div style="flex:2;"><h3>Nhật ký từng lượt chấm công</h3><p class="sub" style="margin:0;" id="nk-ghi-chu"></p></div>
+          <div style="flex:0 0 auto;"><button class="secondary sm" id="xuat-csv">⬇ Tải CSV</button></div>
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+          <div><input type="text" id="nk-tim" placeholder="Tìm theo mã hoặc tên nhân viên"></div>
+          <div>
+            <select id="nk-loc">
+              <option value="">Tất cả kết quả</option>
+              <option value="Thành công">Thành công</option>
+              <option value="Từ chối">Từ chối</option>
+              <option value="Chờ duyệt">Chờ duyệt</option>
+              <option value="Đã huỷ">Đã huỷ</option>
+              <option value="nghiNgo">Bị đánh dấu nghi ngờ</option>
+              <option value="thuCong">Thủ công / duyệt tay</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap" style="max-height:70vh; overflow-y:auto;">
+          <table><thead><tr><th>Ngày</th><th>Giờ</th><th>Nhân viên</th><th>Loại</th><th>Kết quả</th><th>Xác thực</th><th class="so">Điểm khớp</th><th>Địa điểm</th><th>Ghi chú</th><th>Ảnh</th><th class="act"></th></tr></thead><tbody id="nk-body"></tbody></table>
+        </div>
+        <div id="nk-status" class="status hidden"></div>
+      </div>
+    </div>
+
+    <!-- CẦN XỬ LÝ -->
+    <div class="view hidden" id="view-xuly">
+      <div class="card">
+        <h3>Yêu cầu chờ duyệt</h3>
+        <p class="sub">Nhân viên gửi khi nhận diện khuôn mặt thất bại. Lượt chỉ được tính công sau khi bạn bấm Duyệt. Hãy mở ảnh để đối chiếu đúng người.</p>
+        <div id="xl-ds"></div>
+        <div id="xl-status" class="status hidden"></div>
+      </div>
+      <div class="card" id="tc-card">
+        <h3>Chấm công thủ công / ghi bù</h3>
+        <p class="sub">Dùng khi nhân viên quên chấm hoặc thiết bị lỗi. Để trống ngày giờ = ghi nhận ngay bây giờ. Mọi lượt đều lưu tên người ghi và lý do.</p>
+        <div class="row">
+          <div><label for="tc-manv">Nhân viên</label><select id="tc-manv"></select></div>
+          <div><label for="tc-loai">Loại</label><select id="tc-loai"><option value="Vào">Vào</option><option value="Ra">Ra</option></select></div>
+          <div><label for="tc-ngaygio">Ngày giờ (ghi bù)</label><input type="datetime-local" id="tc-ngaygio"></div>
+        </div>
+        <label for="tc-lydo">Lý do (bắt buộc)</label>
+        <input type="text" id="tc-lydo" placeholder="VD: Quên chấm ra, tổ trưởng xác nhận về lúc 17:00">
+        <button id="tc-ghinhan">Ghi nhận</button>
+        <div id="tc-status" class="status hidden"></div>
+      </div>
+      <div class="status info hidden" id="xl-chi-xem">Tài khoản của bạn có quyền "Chỉ xem": xem được danh sách chờ duyệt nhưng không duyệt, không chấm công thủ công được.</div>
+    </div>
+
+    <!-- NHÂN VIÊN -->
+    <div class="view hidden" id="view-nhanvien">
+      <div class="card">
+        <h3>Danh sách nhân viên</h3>
+        <p class="sub">Đăng ký nhân viên mới ở <a href="index.html">trang chấm công</a>, mục "Đăng ký nhân viên". "Xoá khuôn mặt" dùng khi nhân viên nghỉ việc hoặc rút lại đồng ý: xoá hẳn mẫu khuôn mặt và khoá tài khoản, lịch sử công vẫn giữ để tính lương.</p>
+        <div class="table-wrap">
+          <table><thead><tr><th>Mã NV</th><th>Họ tên</th><th>Bộ phận</th><th>Trạng thái</th><th class="so">Mẫu khuôn mặt</th><th>Ngày tạo</th><th class="act"></th></tr></thead><tbody id="nv-body"></tbody></table>
+        </div>
+        <div id="nv-status" class="status hidden"></div>
+      </div>
+    </div>
+
   </div>
-
 </div>
 
 <script>
-let adminPin = null;
-let tenQuanLy = null;
+'use strict';
+/* ============================ TIỆN ÍCH ============================ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function setStatus(el, type, msg) { el.className = 'status ' + type; el.textContent = msg; }
+const p2 = n => String(n).padStart(2, '0');
+const ngayISO = d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+const ngayVN = s => s ? s.substring(8, 10) + '/' + s.substring(5, 7) + '/' + s.substring(0, 4) : '';
+const TEN_THU = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const soVN = n => Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 1 });
 
-document.getElementById('pin-unlock').addEventListener('click', async () => {
-  const pinStatus = document.getElementById('pin-status');
-  const ten = document.getElementById('ten-quanly-input').value.trim();
-  const pin = document.getElementById('pin-input').value;
-  if (!ten || !pin) { alert('Vui lòng nhập tên quản lý và mã PIN.'); return; }
-  setStatus(pinStatus, 'info', 'Đang kiểm tra...');
+let PHIEN = null, NGUOI = null, DATA = null, BO_PHAN = '', LOC_HOM_NAY = '';
+try { const luu = JSON.parse(sessionStorage.getItem('ids_phien') || 'null'); if (luu && luu.phien) { PHIEN = luu.phien; NGUOI = luu.nguoi; } } catch (e) {}
+function luuPhien() { try { PHIEN ? sessionStorage.setItem('ids_phien', JSON.stringify({ phien: PHIEN, nguoi: NGUOI })) : sessionStorage.removeItem('ids_phien'); } catch (e) {} }
+
+async function goi(action, duLieu) {
+  const res = await fetch(CONFIG.WEB_APP_URL, { method: 'POST', body: JSON.stringify(Object.assign({ token: CONFIG.APP_TOKEN, action, phien: PHIEN }, duLieu || {})) });
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch (e) { throw new Error('Máy chủ đang bận, vui lòng thử lại sau ít giây.'); }
+  if (data.hetPhien) { hienDangNhap('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.'); throw new Error('Phiên đăng nhập đã hết hạn.'); }
+  return data;
+}
+const laToanQuyen = () => NGUOI && NGUOI.quyen === 'Toàn quyền';
+
+/* ============================ ĐĂNG NHẬP ============================ */
+function hienDangNhap(msg) {
+  PHIEN = null; NGUOI = null; luuPhien();
+  $('app').classList.add('hidden'); $('user-box').classList.add('hidden'); $('login-card').classList.remove('hidden');
+  if (msg) setStatus($('login-status'), 'warn', msg); else $('login-status').classList.add('hidden');
+}
+function hienApp() {
+  $('login-card').classList.add('hidden'); $('app').classList.remove('hidden'); $('user-box').classList.remove('hidden');
+  $('user-ten').textContent = NGUOI.ten; $('user-quyen').textContent = NGUOI.quyen;
+}
+async function dangNhap() {
+  const ten = $('login-ten').value.trim(), pin = $('login-pin').value;
+  if (!ten || !pin) { setStatus($('login-status'), 'err', 'Vui lòng nhập tên quản lý và mật khẩu.'); return; }
+  $('login-btn').disabled = true;
+  setStatus($('login-status'), 'info', 'Đang kiểm tra...');
   try {
-    const res = await fetch(CONFIG.WEB_APP_URL, {
-      method: 'POST',
-      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'verifyPin', tenQuanLy: ten, pin })
-    });
-    const data = await res.json();
-    if (data.ok && data.valid) {
-      adminPin = pin;
-      tenQuanLy = ten;
-      document.getElementById('pin-card').classList.add('hidden');
-      document.getElementById('report-area').classList.remove('hidden');
-      document.getElementById('tc-card').classList.toggle('hidden', data.quyen !== 'Toàn quyền');
-      datMacDinhKhoangNgay();
-      xemBaoCao();
-    } else if (data.khoa) {
-      setStatus(pinStatus, 'err', data.error || 'Đã khóa tạm thời do nhập sai nhiều lần.');
-    } else {
-      setStatus(pinStatus, 'err', data.error || 'Sai tên quản lý hoặc mã PIN.');
-    }
-  } catch (e) {
-    setStatus(pinStatus, 'err', 'Không kiểm tra được PIN: ' + e.message);
-  }
+    const d = await goi('dangNhap', { tenQuanLy: ten, pin, phien: undefined });
+    if (d.ok && d.valid) {
+      PHIEN = d.phien; NGUOI = { ten: d.ten, quyen: d.quyen }; luuPhien();
+      $('login-pin').value = ''; $('login-status').classList.add('hidden');
+      $('canh-bao-pin').classList.toggle('hidden', !d.pinYeu);
+      hienApp(); datKhoang('thangNay'); taiDuLieu();
+    } else setStatus($('login-status'), 'err', d.error || 'Sai tên quản lý hoặc mật khẩu.');
+  } catch (e) { setStatus($('login-status'), 'err', 'Không đăng nhập được: ' + e.message); }
+  $('login-btn').disabled = false;
+}
+$('login-btn').addEventListener('click', dangNhap);
+$('login-pin').addEventListener('keydown', e => { if (e.key === 'Enter') dangNhap(); });
+$('btn-dangxuat').addEventListener('click', () => { goi('dangXuat').catch(() => {}); hienDangNhap(); });
+
+$('btn-doipin').addEventListener('click', () => { $('doipin-card').classList.toggle('hidden'); $('dp-status').classList.add('hidden'); });
+$('dp-huy').addEventListener('click', () => $('doipin-card').classList.add('hidden'));
+$('dp-luu').addEventListener('click', async () => {
+  const st = $('dp-status');
+  if ($('dp-moi').value.length < 6) { setStatus(st, 'err', 'Mật khẩu mới cần ít nhất 6 ký tự.'); return; }
+  setStatus(st, 'info', 'Đang lưu...');
+  try {
+    const d = await goi('doiPin', { pinCu: $('dp-cu').value, pinMoi: $('dp-moi').value });
+    if (d.ok) { setStatus(st, 'ok', 'Đã đổi mật khẩu. Lần đăng nhập sau hãy dùng mật khẩu mới.'); $('dp-cu').value = ''; $('dp-moi').value = ''; $('canh-bao-pin').classList.add('hidden'); }
+    else setStatus(st, 'err', d.error || 'Không đổi được mật khẩu.');
+  } catch (e) { setStatus(st, 'err', e.message); }
 });
 
-document.getElementById('tc-ghinhan').addEventListener('click', async () => {
-  const tcStatus = document.getElementById('tc-status');
-  const maNV = document.getElementById('tc-manv').value.trim();
-  const loaiChamCong = document.getElementById('tc-loai').value;
-  const lyDo = document.getElementById('tc-lydo').value.trim();
-  if (!maNV || !lyDo) {
-    setStatus(tcStatus, 'err', 'Vui lòng nhập mã nhân viên và lý do.');
+/* ============================ KHOẢNG NGÀY + TẢI DỮ LIỆU ============================ */
+function datKhoang(kieu) {
+  const h = new Date();
+  let tu = h, den = h;
+  if (kieu === 'thangNay') tu = new Date(h.getFullYear(), h.getMonth(), 1);
+  else if (kieu === 'thangTruoc') { tu = new Date(h.getFullYear(), h.getMonth() - 1, 1); den = new Date(h.getFullYear(), h.getMonth(), 0); }
+  else if (kieu === '7ngay') tu = new Date(h.getFullYear(), h.getMonth(), h.getDate() - 6);
+  else return;
+  $('tu-ngay').value = ngayISO(tu); $('den-ngay').value = ngayISO(den); $('chon-nhanh').value = kieu;
+}
+$('chon-nhanh').addEventListener('change', e => { datKhoang(e.target.value); if (e.target.value !== 'tuy') taiDuLieu(); });
+$('tu-ngay').addEventListener('change', () => { $('chon-nhanh').value = 'tuy'; });
+$('den-ngay').addEventListener('change', () => { $('chon-nhanh').value = 'tuy'; });
+$('tai-lai').addEventListener('click', taiDuLieu);
+$('loc-bophan').addEventListener('change', e => { BO_PHAN = e.target.value; veTatCa(); });
+
+async function taiDuLieu() {
+  const st = $('report-status');
+  setStatus(st, 'info', 'Đang tải số liệu...');
+  $('tai-lai').disabled = true;
+  try {
+    const d = await goi('dashboard', { tuNgay: $('tu-ngay').value, denNgay: $('den-ngay').value });
+    if (!d.ok) throw new Error(d.error || 'Không tải được báo cáo.');
+    DATA = d; NGUOI = d.nguoiDung; luuPhien(); hienApp();
+    st.classList.add('hidden');
+    $('cap-nhat').textContent = 'Số liệu lúc ' + new Date(d.taoLuc).toLocaleString('vi-VN') + '. Ca chuẩn ' + d.cauHinh.gioVao + ' - ' + d.cauHinh.gioRa +
+      ', cho phép trễ ' + d.cauHinh.phutTre + ' phút' + (d.cauHinh.phutNghiTrua ? ', trừ nghỉ trưa ' + d.cauHinh.phutNghiTrua + ' phút' : '') + '.';
+    const dsBP = [...new Set(d.bangCong.map(x => x.boPhan).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+    if (BO_PHAN && !dsBP.includes(BO_PHAN)) BO_PHAN = '';
+    $('loc-bophan').innerHTML = '<option value="">Tất cả</option>' + dsBP.map(b => '<option' + (b === BO_PHAN ? ' selected' : '') + '>' + esc(b) + '</option>').join('');
+    veTatCa();
+  } catch (e) {
+    if (PHIEN) setStatus(st, 'err', 'Lỗi: ' + e.message);
+  }
+  $('tai-lai').disabled = false;
+}
+
+const theoBoPhan = ds => BO_PHAN ? ds.filter(x => x.boPhan === BO_PHAN) : ds;
+function veTatCa() {
+  if (!DATA) return;
+  veHomNay(); veTongQuan(); veBangCong(); veNhatKy(); veXuLy(); veNhanVien();
+}
+
+/* ============================ TAB ============================ */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('hidden', v.id !== 'view-' + t.dataset.view));
+  if (t.dataset.view === 'thang') veBieuDoNgay(); // vẽ lại theo bề rộng thật khi tab hiện ra
+}));
+
+/* ============================ HÔM NAY ============================ */
+const TT_HOM_NAY = {
+  dangLam: { nhan: 'Đúng giờ, đang làm', badge: 'ok' }, tre: { nhan: 'Đi trễ', badge: 'warn' },
+  daRa: { nhan: 'Đã chấm ra', badge: 'idle' }, chuaCham: { nhan: 'Chưa chấm công', badge: 'err' }
+};
+function veHomNay() {
+  const hn = DATA.homNay;
+  const ds = theoBoPhan(hn.ds);
+  const coMat = ds.filter(x => x.tt !== 'chuaCham').length;
+  const tre = ds.filter(x => x.t).length;
+  const dungGio = coMat - tre;
+  const chuaCham = ds.length - coMat;
+  const chuaRa = ds.filter(x => x.v && !x.r).length;
+  $('hn-tieu-de').textContent = 'Tình hình hôm nay, ' + TEN_THU[new Date(hn.ngay + 'T12:00:00').getDay()] + ' ' + ngayVN(hn.ngay) + (hn.lamViec ? '' : ' (ngày nghỉ)');
+  $('hn-tiles').innerHTML = [
+    ['', coMat + '<small> / ' + ds.length + '</small>', 'Đã chấm công'],
+    ['good', dungGio, 'Đúng giờ'], ['warn', tre, 'Đi trễ'], ['bad', chuaCham, 'Chưa chấm công'], ['idle', chuaRa, 'Đang làm, chưa chấm ra']
+  ].map(t => '<div class="tile"><div class="so">' + t[1] + '</div><div class="nhan">' + (t[0] ? '<i class="cham ' + t[0] + '"></i>' : '') + t[2] + '</div></div>').join('');
+
+  const tong = Math.max(1, ds.length);
+  const phan = [['good', dungGio, 'Đúng giờ'], ['warn', tre, 'Đi trễ'], ['bad', chuaCham, 'Chưa chấm công']];
+  $('hn-thanh').innerHTML = phan.filter(x => x[1] > 0).map(x => '<span style="flex:' + x[1] + '; background:var(--' + x[0] + ')" title="' + x[2] + ': ' + x[1] + '"></span>').join('') ||
+    '<span style="flex:1; background:var(--idle)"></span>';
+  $('hn-legend').innerHTML = phan.map(x => '<span><i class="cham ' + x[0] + '"></i>' + x[2] + ': <b style="color:var(--text)">' + x[1] + '</b> (' + Math.round(x[1] / tong * 100) + '%)</span>').join('');
+
+  const boLoc = [['', 'Tất cả', ds.length], ['chuaCham', 'Chưa chấm', chuaCham], ['tre', 'Đi trễ', tre], ['chuaRa', 'Đang làm', chuaRa]];
+  $('hn-chips').innerHTML = boLoc.map(b => '<button class="chip' + (LOC_HOM_NAY === b[0] ? ' active' : '') + '" data-loc="' + b[0] + '">' + b[1] + ' (' + b[2] + ')</button>').join('');
+  $('hn-chips').querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { LOC_HOM_NAY = c.dataset.loc; veHomNay(); }));
+
+  const thuTu = { chuaCham: 0, tre: 1, dangLam: 2, daRa: 3 };
+  const loc = ds.filter(x => !LOC_HOM_NAY || (LOC_HOM_NAY === 'chuaCham' && x.tt === 'chuaCham') || (LOC_HOM_NAY === 'tre' && x.t) || (LOC_HOM_NAY === 'chuaRa' && x.v && !x.r))
+    .sort((a, b) => thuTu[a.tt] - thuTu[b.tt] || a.maNV.localeCompare(b.maNV));
+  $('hn-body').innerHTML = loc.length === 0 ? '<tr><td colspan="5" class="small">Không có nhân viên nào trong nhóm này.</td></tr>' : loc.map(x => {
+    const tt = TT_HOM_NAY[x.tt];
+    let nhan = tt.nhan;
+    if (x.t) nhan = 'Trễ ' + x.t + ' phút' + (x.r ? ', đã ra' : '');
+    return '<tr><td>' + esc(x.hoTen) + '<br><span class="small">' + esc(x.maNV) + '</span></td><td class="tinh">' + (x.v || '-') + '</td><td class="tinh">' + (x.r || '-') +
+      '</td><td><span class="badge ' + (x.t ? 'warn' : tt.badge) + '">' + nhan + '</span>' + (x.tc ? ' <span class="badge idle">thủ công</span>' : '') + '</td><td>' + esc(x.boPhan) + '</td></tr>';
+  }).join('');
+}
+
+/* ============================ TỔNG QUAN ============================ */
+function demTheoNgay() {
+  // Khi lọc bộ phận phải đếm lại từ bảng công; không lọc thì dùng số máy chủ đã tính.
+  if (!BO_PHAN) return DATA.theoNgay;
+  const bc = theoBoPhan(DATA.bangCong);
+  return DATA.theoNgay.map(dn => {
+    const o = { ngay: dn.ngay, thu: dn.thu, lamViec: dn.lamViec, dungGio: 0, diTre: 0, vang: 0 };
+    bc.forEach(nv => { const c = nv.ngay[dn.ngay]; if (!c) return; if (c.x) o.vang++; else if (c.t) o.diTre++; else if (c.v) o.dungGio++; });
+    return o;
+  });
+}
+function veTongQuan() {
+  const bc = theoBoPhan(DATA.bangCong);
+  const tong = (k) => bc.reduce((s, x) => s + (x[k] || 0), 0);
+  const luotCoMat = demTheoNgay().reduce((s, d) => s + d.dungGio + d.diTre, 0);
+  const tiLeDungGio = luotCoMat ? Math.round((luotCoMat - tong('soLanTre')) / luotCoMat * 100) : null;
+  $('th-tiles').innerHTML = [
+    ['', soVN(tong('ngayCong')), 'Tổng ngày công (đủ vào + ra)'],
+    ['', soVN(tong('tongGio')) + '<small> giờ</small>', 'Tổng giờ công'],
+    ['good', tiLeDungGio == null ? '-' : tiLeDungGio + '<small>%</small>', 'Lượt vào đúng giờ'],
+    ['warn', tong('soLanTre'), 'Lượt đi trễ'],
+    ['bad', tong('ngayVang'), 'Ngày vắng / không chấm'],
+    ['idle', tong('ngayThieu'), 'Ngày thiếu chấm vào/ra']
+  ].map(t => '<div class="tile"><div class="so">' + t[1] + '</div><div class="nhan">' + (t[0] ? '<i class="cham ' + t[0] + '"></i>' : '') + t[2] + '</div></div>').join('');
+
+  const tre = bc.filter(x => x.soLanTre > 0).sort((a, b) => b.soLanTre - a.soLanTre || b.phutTre - a.phutTre).slice(0, 10);
+  const max = Math.max(1, ...tre.map(x => x.soLanTre));
+  $('th-tre').innerHTML = tre.length === 0 ? '<tr><td colspan="4" class="small">Không có ai đi trễ trong khoảng ngày này.</td></tr>' : tre.map(x =>
+    '<tr><td>' + esc(x.hoTen) + ' <span class="small">' + esc(x.maNV) + '</span></td><td>' + esc(x.boPhan) + '</td>' +
+    '<td><span class="bar-track"><span class="bar-fill" style="display:block;width:' + Math.round(x.soLanTre / max * 100) + '%"></span></span><span class="tinh">' + x.soLanTre + '</span></td>' +
+    '<td class="so">' + x.phutTre + '</td></tr>').join('');
+  veBieuDoNgay();
+}
+
+function veBieuDoNgay() {
+  const host = $('chart-ngay');
+  if (!DATA || host.offsetParent === null) return;
+  const ds = demTheoNgay();
+  const W = Math.max(320, host.clientWidth), H = 240, mL = 30, mR = 6, mT = 10, mB = 34;
+  const max = Math.max(1, ...ds.map(d => d.dungGio + d.diTre + d.vang));
+  const buoc = max <= 5 ? 1 : max <= 10 ? 2 : max <= 25 ? 5 : max <= 50 ? 10 : 20;
+  const yMax = Math.ceil(max / buoc) * buoc;
+  const pw = W - mL - mR, ph = H - mT - mB;
+  const cot = pw / ds.length, bw = Math.max(3, Math.min(26, cot - 4));
+  const y = v => mT + ph - v / yMax * ph;
+  const moiNhan = ds.length > 45 ? 3 : (cot < 17 ? 2 : 1);
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Biểu đồ cột chồng: số nhân viên đúng giờ, đi trễ, vắng theo từng ngày">';
+  for (let v = 0; v <= yMax; v += buoc) {
+    s += '<line x1="' + mL + '" x2="' + (W - mR) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="rgba(255,255,255,' + (v === 0 ? '.25' : '.07') + ')"/>' +
+      '<text x="' + (mL - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="10.5" fill="#8a93a6">' + v + '</text>';
+  }
+  ds.forEach((d, i) => {
+    const x = mL + i * cot + (cot - bw) / 2;
+    const cx = mL + i * cot + cot / 2;
+    s += '<g class="cot">';
+    s += '<rect class="vung" data-i="' + i + '" tabindex="0" x="' + (mL + i * cot) + '" y="' + mT + '" width="' + cot + '" height="' + ph + '" fill="transparent"/>';
+    s += '<rect class="nen" x="' + (mL + i * cot) + '" y="' + mT + '" width="' + cot + '" height="' + ph + '" fill="rgba(255,255,255,.06)" opacity="0" pointer-events="none"/>';
+    let nen = 0;
+    const phan = [['dungGio', '#1fd8a4'], ['diTre', '#f7b955'], ['vang', '#fb4570']].filter(p => d[p[0]] > 0);
+    phan.forEach((p, j) => {
+      const h = d[p[0]] / yMax * ph;
+      const khe = j > 0 ? 2 : 0; // khe 2px giữa các đoạn chồng
+      const hh = Math.max(1, h - khe);
+      const yy = mT + ph - nen - h;
+      const r = j === phan.length - 1 ? Math.min(4, bw / 2, hh) : 0;
+      s += r ? '<path pointer-events="none" fill="' + p[1] + '" d="M' + x + ',' + (yy + hh) + 'V' + (yy + r) + 'Q' + x + ',' + yy + ' ' + (x + r) + ',' + yy + 'H' + (x + bw - r) + 'Q' + (x + bw) + ',' + yy + ' ' + (x + bw) + ',' + (yy + r) + 'V' + (yy + hh) + 'Z"/>'
+        : '<rect pointer-events="none" x="' + x + '" y="' + yy + '" width="' + bw + '" height="' + hh + '" fill="' + p[1] + '"/>';
+      nen += h;
+    });
+    if (i % moiNhan === 0) {
+      s += '<text x="' + cx + '" y="' + (H - mB + 14) + '" text-anchor="middle" font-size="10.5" fill="' + (d.lamViec ? '#c3cad8' : '#5b6478') + '">' + Number(d.ngay.substring(8)) + '</text>';
+      if (cot * moiNhan >= 22) s += '<text x="' + cx + '" y="' + (H - mB + 27) + '" text-anchor="middle" font-size="9.5" fill="' + (d.lamViec ? '#8a93a6' : '#5b6478') + '">' + TEN_THU[d.thu] + '</text>';
+    }
+    s += '</g>';
+  });
+  s += '</svg><div class="tooltip hidden"></div>';
+  host.innerHTML = s;
+  const tip = host.querySelector('.tooltip');
+  const hien = el => {
+    const d = ds[Number(el.dataset.i)];
+    tip.innerHTML = '<b>' + TEN_THU[d.thu] + ' ' + ngayVN(d.ngay) + (d.lamViec ? '' : ' (ngày nghỉ)') + '</b>' +
+      '<i class="cham good"></i> Đúng giờ: ' + d.dungGio + '<br><i class="cham warn"></i> Đi trễ: ' + d.diTre + '<br><i class="cham bad"></i> Vắng: ' + d.vang;
+    tip.classList.remove('hidden');
+    const i = Number(el.dataset.i);
+    const tyLe = host.clientWidth / W;
+    let left = (mL + i * cot + cot / 2) * tyLe + 10;
+    if (left + tip.offsetWidth > host.clientWidth) left = (mL + i * cot + cot / 2) * tyLe - tip.offsetWidth - 10;
+    tip.style.left = Math.max(0, left) + 'px'; tip.style.top = '8px';
+  };
+  host.querySelectorAll('.vung').forEach(el => {
+    el.addEventListener('mouseenter', () => hien(el)); el.addEventListener('focus', () => hien(el)); el.addEventListener('click', () => hien(el));
+    el.addEventListener('mouseleave', () => tip.classList.add('hidden')); el.addEventListener('blur', () => tip.classList.add('hidden'));
+  });
+}
+let hen; window.addEventListener('resize', () => { clearTimeout(hen); hen = setTimeout(veBieuDoNgay, 150); });
+
+/* ============================ BẢNG CÔNG ============================ */
+function veBangCong() {
+  const ngay = DATA.theoNgay, bc = theoBoPhan(DATA.bangCong);
+  $('bc-chu-thich').textContent = 'Từ ' + ngayVN(DATA.tuNgay) + ' đến ' + ngayVN(DATA.denNgay) + '. Mỗi ô: giờ vào trên, giờ ra dưới.';
+  $('in-khoang').textContent = 'Từ ' + ngayVN(DATA.tuNgay) + ' đến ' + ngayVN(DATA.denNgay) + (BO_PHAN ? ' - Bộ phận: ' + BO_PHAN : '');
+  let h = '<thead><tr><th class="co-dinh">Nhân viên</th>' +
+    ngay.map(d => '<th class="' + (d.lamViec ? '' : 'nghi') + '">' + Number(d.ngay.substring(8)) + '<br>' + TEN_THU[d.thu] + '</th>').join('') +
+    '<th>Ngày<br>công</th><th>Giờ<br>công</th><th>Lần<br>trễ</th><th>Phút<br>trễ</th><th>Về<br>sớm</th><th>Thiếu<br>chấm</th><th>Vắng</th></tr></thead><tbody>';
+  if (bc.length === 0) h += '<tr><td class="co-dinh small">Không có dữ liệu.</td></tr>';
+  bc.forEach(nv => {
+    h += '<tr><td class="co-dinh" title="' + esc(nv.maNV + ' - ' + nv.hoTen + (nv.boPhan ? ' - ' + nv.boPhan : '')) + '">' + esc(nv.hoTen) + '<br><span class="small">' + esc(nv.maNV) + (nv.trangThai !== 'Hoạt động' ? ' · ' + esc(nv.trangThai) : '') + '</span></td>';
+    ngay.forEach(d => {
+      const c = nv.ngay[d.ngay];
+      let cls = 'o' + (d.lamViec ? '' : ' nghi'), nd = '', tip = '';
+      if (c && c.x) { cls += ' vang'; nd = 'V'; tip = 'Vắng / không chấm công'; }
+      else if (c) {
+        if (c.t) { cls += ' tre'; tip = 'Trễ ' + c.t + ' phút. '; }
+        if (!c.v || !c.r) { cls += ' thieu'; tip += 'Thiếu chấm ' + (c.v ? 'ra' : 'vào') + '. '; }
+        if (c.s) tip += 'Về sớm ' + c.s + ' phút. ';
+        if (c.g) tip += c.g + ' giờ. ';
+        if (c.tc) tip += 'Có lượt thủ công. ';
+        nd = (c.v || '--') + '<br>' + (c.r || '--') + (c.tc ? '*' : '');
+      }
+      h += '<td class="' + cls + '"' + (tip ? ' title="' + esc(tip.trim()) + '"' : '') + '>' + nd + '</td>';
+    });
+    h += '<td class="tong">' + nv.ngayCong + '</td><td class="tong">' + soVN(nv.tongGio) + '</td><td class="tong">' + nv.soLanTre + '</td><td class="tong">' + nv.phutTre +
+      '</td><td class="tong">' + nv.soLanVeSom + '</td><td class="tong">' + nv.ngayThieu + '</td><td class="tong">' + nv.ngayVang + '</td></tr>';
+  });
+  $('bang-cong').innerHTML = h + '</tbody>';
+}
+$('in-pdf').addEventListener('click', () => window.print());
+
+/* ============================ NHẬT KÝ ============================ */
+const NHAN_XAC_THUC = { 'KhuônMặt': 'Khuôn mặt', 'ThủCông': 'Thủ công', 'DuyệtTay': 'Duyệt tay', 'ChờDuyệt': 'Yêu cầu duyệt' };
+const BADGE_KQ = { 'Thành công': 'ok', 'Từ chối': 'err', 'Chờ duyệt': 'warn', 'Đã huỷ': 'idle' };
+function locNhatKy() {
+  const tim = $('nk-tim').value.trim().toLowerCase(), loc = $('nk-loc').value;
+  const maBP = BO_PHAN ? new Set(DATA.bangCong.filter(x => x.boPhan === BO_PHAN).map(x => x.maNV)) : null;
+  return DATA.chiTiet.filter(r => {
+    if (maBP && !maBP.has(r.maNV)) return false;
+    if (tim && !(r.maNV.toLowerCase().includes(tim) || r.hoTen.toLowerCase().includes(tim))) return false;
+    if (loc === 'nghiNgo') return r.nghiNgo;
+    if (loc === 'thuCong') return r.xacThuc !== 'KhuônMặt';
+    return !loc || r.ketQua === loc;
+  });
+}
+function veNhatKy() {
+  const ds = locNhatKy();
+  $('nk-ghi-chu').textContent = DATA.tongChiTiet > DATA.chiTiet.length
+    ? 'Hiển thị ' + DATA.chiTiet.length + ' lượt mới nhất trong tổng số ' + DATA.tongChiTiet + '. Chọn khoảng ngày ngắn hơn để xem đủ.'
+    : DATA.chiTiet.length + ' lượt trong khoảng ngày đang xem.';
+  $('nk-body').innerHTML = ds.length === 0 ? '<tr><td colspan="11" class="small">Không có lượt nào khớp bộ lọc.</td></tr>' : ds.map(r => {
+    const ghiChu = [r.lyDo, r.nghiNgo ? 'Nghi ngờ: ' + r.lyDoNghiNgo : '', r.nguoiXuLy ? 'Người xử lý: ' + r.nguoiXuLy : '', r.ghiChuXuLy].filter(Boolean).join(' · ');
+    const nut = laToanQuyen() && r.ketQua === 'Thành công' ? '<button class="secondary sm" data-huy="' + r.dong + '">Huỷ lượt</button>' : '';
+    return '<tr><td class="tinh">' + ngayVN(r.ngay) + '</td><td class="tinh">' + r.gio + '</td><td>' + esc(r.hoTen) + ' <span class="small">' + esc(r.maNV) + '</span></td><td>' + esc(r.loai) + '</td>' +
+      '<td><span class="badge ' + (BADGE_KQ[r.ketQua] || 'idle') + '">' + esc(r.ketQua) + '</span>' + (r.nghiNgo ? ' <span class="badge warn" title="' + esc(r.lyDoNghiNgo) + '">⚠ Nghi ngờ</span>' : '') + '</td>' +
+      '<td>' + esc(NHAN_XAC_THUC[r.xacThuc] || r.xacThuc) + '</td><td class="so">' + (r.diemKhop == null ? '-' : r.diemKhop.toFixed(2)) + '</td><td>' + esc(r.diaDiem) + '</td>' +
+      '<td style="white-space:normal; min-width:180px; max-width:320px;">' + esc(ghiChu) + '</td>' +
+      '<td>' + (/^https:\/\//.test(r.anh) ? '<a href="' + esc(r.anh) + '" target="_blank" rel="noopener">Xem ảnh</a>' : '-') + '</td><td class="act">' + nut + '</td></tr>';
+  }).join('');
+  $('nk-body').querySelectorAll('[data-huy]').forEach(b => b.addEventListener('click', () => moHuy(b)));
+}
+$('nk-tim').addEventListener('input', veNhatKy);
+$('nk-loc').addEventListener('change', veNhatKy);
+
+function moHuy(btn) {
+  const td = btn.parentElement, dong = Number(btn.dataset.huy);
+  td.innerHTML = '<input type="text" placeholder="Lý do huỷ (bắt buộc)" style="width:170px; padding:7px 9px; font-size:12.5px;"> <button class="bad sm">Xác nhận huỷ</button> <button class="secondary sm">Thôi</button>';
+  const [inp, okBtn, thoi] = td.children;
+  inp.focus();
+  thoi.addEventListener('click', veNhatKy);
+  okBtn.addEventListener('click', () => xuLyLuot(dong, 'huy', inp.value.trim(), $('nk-status'), okBtn));
+}
+
+async function xuLyLuot(dong, hanhDong, ghiChu, st, btn) {
+  const r = DATA.chiTiet.concat(DATA.choDuyet).find(x => x.dong === dong);
+  if (!r) return;
+  if ((hanhDong === 'huy' || hanhDong === 'tuChoi') && !ghiChu) { setStatus(st, 'err', 'Cần ghi lý do.'); return; }
+  if (btn) btn.disabled = true;
+  setStatus(st, 'info', 'Đang xử lý...');
+  try {
+    const d = await goi('xuLyLuot', { dong, ms: r.ms, hanhDong, ghiChu });
+    if (!d.ok) { setStatus(st, 'err', d.error || 'Không xử lý được.'); if (btn) btn.disabled = false; return; }
+    setStatus(st, 'ok', 'Đã cập nhật: ' + r.hoTen + ' - ' + r.loai + ' ' + r.gio + ' ' + ngayVN(r.ngay) + ' → ' + d.ketQua + '.');
+    await taiDuLieu();
+  } catch (e) { setStatus(st, 'err', e.message); if (btn) btn.disabled = false; }
+}
+
+/* ============================ CẦN XỬ LÝ ============================ */
+function veXuLy() {
+  const ds = DATA.choDuyet;
+  $('dem-xuly').textContent = ds.length; $('dem-xuly').classList.toggle('hidden', ds.length === 0);
+  $('tc-card').classList.toggle('hidden', !laToanQuyen());
+  $('xl-chi-xem').classList.toggle('hidden', laToanQuyen());
+  $('xl-ds').innerHTML = ds.length === 0 ? '<p class="small">Không có yêu cầu nào đang chờ.</p>' : ds.map(r => {
+    const viTri = r.trongVung === true ? '<span class="badge ok">Trong khu vực' + (r.khoangCach != null ? ', cách ' + r.khoangCach + 'm' : '') + '</span>'
+      : r.trongVung === false ? '<span class="badge err">Ngoài khu vực' + (r.khoangCach != null ? ', cách ' + r.khoangCach + 'm' : '') + '</span>' : '<span class="badge idle">Không có GPS</span>';
+    return '<div class="yc" data-dong="' + r.dong + '"><div class="dau"><div><b>' + esc(r.hoTen) + '</b> <span class="small">' + esc(r.maNV) + '</span> · chấm <b>' + esc(r.loai) + '</b> lúc <b class="tinh">' + r.gio + ' ' + ngayVN(r.ngay) + '</b></div><div>' + viTri + '</div></div>' +
+      '<div class="small" style="margin-top:6px;">' + esc(r.lyDo) + (r.diaDiem ? ' · Gần: ' + esc(r.diaDiem) : '') + (/^https:\/\//.test(r.anh) ? ' · <a href="' + esc(r.anh) + '" target="_blank" rel="noopener">Xem ảnh gửi kèm</a>' : ' · Không có ảnh') + '</div>' +
+      (laToanQuyen() ? '<div class="nut"><button class="good sm" data-hd="duyet">✓ Duyệt</button><input type="text" placeholder="Lý do nếu từ chối"><button class="bad sm" data-hd="tuChoi">✕ Từ chối</button></div>' : '') + '</div>';
+  }).join('');
+  $('xl-ds').querySelectorAll('[data-hd]').forEach(b => b.addEventListener('click', () => {
+    const khoi = b.closest('.yc');
+    xuLyLuot(Number(khoi.dataset.dong), b.dataset.hd, khoi.querySelector('input').value.trim(), $('xl-status'), b);
+  }));
+  const chon = $('tc-manv').value;
+  $('tc-manv').innerHTML = '<option value="">-- Chọn nhân viên --</option>' + DATA.nhanVien.filter(x => x.trangThai === 'Hoạt động')
+    .map(x => '<option value="' + esc(x.maNV) + '"' + (x.maNV === chon ? ' selected' : '') + '>' + esc(x.maNV + ' - ' + x.hoTen) + '</option>').join('');
+}
+$('tc-ghinhan').addEventListener('click', async () => {
+  const st = $('tc-status');
+  const maNV = $('tc-manv').value, lyDo = $('tc-lydo').value.trim(), ngayGio = $('tc-ngaygio').value;
+  if (!maNV || !lyDo) { setStatus(st, 'err', 'Vui lòng chọn nhân viên và nhập lý do.'); return; }
+  $('tc-ghinhan').disabled = true;
+  setStatus(st, 'info', 'Đang ghi nhận...');
+  try {
+    const d = await goi('checkinThuCong', { maNV, loaiChamCong: $('tc-loai').value, lyDo, ngayGio: ngayGio ? ngayGio.substring(0, 16) : undefined });
+    if (d.ok) {
+      $('tc-lydo').value = ''; $('tc-ngaygio').value = '';
+      await taiDuLieu();
+      setStatus(st, 'ok', 'Đã ghi nhận cho "' + d.hoTen + '" lúc ' + new Date(d.thoiGian).toLocaleString('vi-VN') + '.');
+    } else setStatus(st, 'err', 'Lỗi: ' + d.error);
+  } catch (e) { setStatus(st, 'err', e.message); }
+  $('tc-ghinhan').disabled = false;
+});
+
+/* ============================ NHÂN VIÊN ============================ */
+function veNhanVien() {
+  const ds = theoBoPhan(DATA.nhanVien);
+  $('nv-body').innerHTML = ds.length === 0 ? '<tr><td colspan="7" class="small">Chưa có nhân viên.</td></tr>' : ds.map(x => {
+    const hd = x.trangThai === 'Hoạt động';
+    const nut = !laToanQuyen() ? '' :
+      '<button class="secondary sm" data-nv="' + esc(x.maNV) + '" data-hd="sua">Sửa</button> ' +
+      '<button class="secondary sm" data-nv="' + esc(x.maNV) + '" data-hd="' + (hd ? 'khoa' : 'mo') + '">' + (hd ? 'Khoá' : 'Mở khoá') + '</button> ' +
+      (x.soMau > 0 ? '<button class="secondary sm" data-nv="' + esc(x.maNV) + '" data-hd="xoaKhuonMat">Xoá khuôn mặt</button>' : '');
+    return '<tr><td>' + esc(x.maNV) + '</td><td>' + esc(x.hoTen) + '</td><td>' + esc(x.boPhan) + '</td><td><span class="badge ' + (hd ? 'ok' : 'idle') + '">' + esc(x.trangThai) + '</span></td>' +
+      '<td class="so">' + x.soMau + '</td><td class="tinh">' + ngayVN(x.ngayTao) + '</td><td class="act">' + nut + '</td></tr>';
+  }).join('');
+  $('nv-body').querySelectorAll('[data-nv]').forEach(b => b.addEventListener('click', () => thaoTacNhanVien(b)));
+}
+function thaoTacNhanVien(btn) {
+  const maNV = btn.dataset.nv, hd = btn.dataset.hd, td = btn.parentElement;
+  const nv = DATA.nhanVien.find(x => x.maNV === maNV);
+  if (hd === 'sua') {
+    td.innerHTML = '<input type="text" value="' + esc(nv.hoTen) + '" placeholder="Họ tên" style="width:150px; padding:7px 9px; font-size:12.5px;"> ' +
+      '<input type="text" value="' + esc(nv.boPhan) + '" placeholder="Bộ phận" style="width:120px; padding:7px 9px; font-size:12.5px;"> <button class="sm">Lưu</button> <button class="secondary sm">Thôi</button>';
+    const [ten, bp, luu, thoi] = td.children;
+    thoi.addEventListener('click', veNhanVien);
+    luu.addEventListener('click', () => guiNhanVien(maNV, 'sua', { hoTen: ten.value.trim(), boPhan: bp.value.trim() }, luu));
     return;
   }
-  setStatus(tcStatus, 'info', 'Đang ghi nhận...');
-  try {
-    const res = await fetch(CONFIG.WEB_APP_URL, {
-      method: 'POST',
-      body: JSON.stringify({ token: CONFIG.APP_TOKEN, action: 'checkinThuCong', tenQuanLy, adminPin, maNV, loaiChamCong, lyDo })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      setStatus(tcStatus, 'ok', 'Đã ghi nhận chấm công thủ công cho "' + data.hoTen + '".');
-      document.getElementById('tc-manv').value = '';
-      document.getElementById('tc-lydo').value = '';
-      xemBaoCao();
-    } else {
-      setStatus(tcStatus, 'err', 'Lỗi: ' + data.error);
-    }
-  } catch (e) {
-    setStatus(tcStatus, 'err', 'Không gửi được dữ liệu: ' + e.message);
+  if (hd === 'xoaKhuonMat' && btn.dataset.xacNhan !== '1') { // bấm 2 lần mới xoá
+    btn.dataset.xacNhan = '1'; btn.className = 'bad sm'; btn.textContent = 'Bấm lần nữa để xoá hẳn';
+    setTimeout(() => { if (btn.isConnected) { btn.dataset.xacNhan = ''; btn.className = 'secondary sm'; btn.textContent = 'Xoá khuôn mặt'; } }, 5000);
+    return;
   }
-});
-
-function setStatus(el, type, msg) {
-  el.className = 'status ' + type;
-  el.textContent = msg;
-  el.classList.remove('hidden');
+  guiNhanVien(maNV, hd, {}, btn);
 }
-
-function dinhDangNgay(d) {
-  const p = n => String(n).padStart(2, '0');
-  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
-}
-
-function datMacDinhKhoangNgay() {
-  const homNay = new Date();
-  const dauThang = new Date(homNay.getFullYear(), homNay.getMonth(), 1);
-  document.getElementById('tu-ngay').value = dinhDangNgay(dauThang);
-  document.getElementById('den-ngay').value = dinhDangNgay(homNay);
-}
-
-document.getElementById('xem-bao-cao').addEventListener('click', xemBaoCao);
-
-async function xemBaoCao() {
-  const reportStatus = document.getElementById('report-status');
-  const tuNgay = document.getElementById('tu-ngay').value;
-  const denNgay = document.getElementById('den-ngay').value;
-  const maNVLoc = document.getElementById('loc-manv').value.trim();
-  setStatus(reportStatus, 'info', 'Đang tải báo cáo...');
-
+async function guiNhanVien(maNV, hanhDong, them, btn) {
+  const st = $('nv-status');
+  btn.disabled = true;
+  setStatus(st, 'info', 'Đang cập nhật...');
   try {
-    const urlBaoCao = CONFIG.WEB_APP_URL + '?action=report&token=' + encodeURIComponent(CONFIG.APP_TOKEN) +
-      '&tuNgay=' + encodeURIComponent(tuNgay) + '&denNgay=' + encodeURIComponent(denNgay);
-    let urlChiTiet = CONFIG.WEB_APP_URL + '?action=listChamCong&token=' + encodeURIComponent(CONFIG.APP_TOKEN) +
-      '&tuNgay=' + encodeURIComponent(tuNgay) + '&denNgay=' + encodeURIComponent(denNgay) + '&limit=300';
-    if (maNVLoc) urlChiTiet += '&maNV=' + encodeURIComponent(maNVLoc);
-
-    const [resBaoCao, resChiTiet] = await Promise.all([fetch(urlBaoCao), fetch(urlChiTiet)]);
-    const baoCao = await resBaoCao.json();
-    const chiTiet = await resChiTiet.json();
-    if (!baoCao.ok) throw new Error(baoCao.error || 'Lỗi tải báo cáo tổng hợp.');
-    if (!chiTiet.ok) throw new Error(chiTiet.error || 'Lỗi tải nhật ký chi tiết.');
-
-    let tongHop = baoCao.tongHop || [];
-    if (maNVLoc) tongHop = tongHop.filter(x => x.maNV === maNVLoc);
-
-    duLieuTongHopHienTai = tongHop;
-    duLieuChiTietHienTai = chiTiet.banGhi || [];
-
-    veTheThongKe(tongHop, chiTiet.banGhi || []);
-    veBangTongHop(tongHop);
-    veBangChiTiet(chiTiet.banGhi || []);
-
-    reportStatus.classList.add('hidden');
-  } catch (e) {
-    setStatus(reportStatus, 'err', 'Lỗi: ' + e.message);
-  }
+    const d = await goi('capNhatNhanVien', Object.assign({ maNV, hanhDong }, them));
+    if (!d.ok) { setStatus(st, 'err', d.error || 'Không cập nhật được.'); btn.disabled = false; return; }
+    await taiDuLieu();
+    setStatus(st, 'ok', hanhDong === 'xoaKhuonMat' ? 'Đã xoá ' + d.soMauDaXoa + ' mẫu khuôn mặt của ' + maNV + ' và khoá tài khoản. Ảnh bằng chứng cũ trên Google Drive (nếu cần xoá) phải xoá tay trong thư mục ChamCong_AnhBangChung.' : 'Đã cập nhật ' + maNV + '.');
+  } catch (e) { setStatus(st, 'err', e.message); btn.disabled = false; }
 }
 
-function veTheThongKe(tongHop, chiTiet) {
-  const tongGio = tongHop.reduce((s, x) => s + x.tongGioCong, 0);
-  const tongDiTre = tongHop.reduce((s, x) => s + x.soLanDiTre, 0);
-  const tongTuChoi = tongHop.reduce((s, x) => s + x.soLanTuChoi, 0);
-  const tongNghiNgoGps = chiTiet.filter(x => x.coNghiNgoGps).length;
-
-  const the = [
-    { so: tongHop.length, nhan: 'Nhân viên có chấm công', kieu: '' },
-    { so: Math.round(tongGio * 10) / 10, nhan: 'Tổng giờ công', kieu: '' },
-    { so: tongDiTre, nhan: 'Lượt đi trễ', kieu: 'warn' },
-    { so: tongTuChoi, nhan: 'Lượt bị từ chối', kieu: 'danger' },
-    { so: tongNghiNgoGps, nhan: 'Nghi ngờ GPS giả mạo', kieu: 'danger' }
-  ];
-  document.getElementById('cards-grid').innerHTML = the.map(t =>
-    '<div class="stat-card ' + t.kieu + '"><div class="so">' + t.so + '</div><div class="nhan">' + t.nhan + '</div></div>'
-  ).join('');
-}
-
-function veBangTongHop(tongHop) {
-  const gioMax = Math.max(1, ...tongHop.map(x => x.tongGioCong));
-  const tbody = document.querySelector('#table-tonghop tbody');
-  tbody.innerHTML = tongHop.length === 0
-    ? '<tr><td colspan="5" class="small">Không có dữ liệu trong khoảng ngày này.</td></tr>'
-    : tongHop.map(x => (
-        '<tr><td>' + escHtml(x.maNV) + '</td><td>' + escHtml(x.hoTen) + '</td>' +
-        '<td><span class="bar-track"><span class="bar-fill" style="width:' + Math.round(x.tongGioCong / gioMax * 100) + '%"></span></span> ' + x.tongGioCong + 'h</td>' +
-        '<td>' + x.soLanDiTre + '</td><td>' + x.soLanTuChoi + '</td></tr>'
-      )).join('');
-}
-
-function veBangChiTiet(banGhi) {
-  const tbody = document.querySelector('#table-chitiet tbody');
-  tbody.innerHTML = banGhi.length === 0
-    ? '<tr><td colspan="10" class="small">Không có dữ liệu trong khoảng ngày này.</td></tr>'
-    : banGhi.map(r => {
-        const thoiGian = new Date(r.thoiGian).toLocaleString('vi-VN');
-        const ketQuaBadge = r.ketQua === 'Thành công'
-          ? '<span class="badge ok">Thành công</span>'
-          : '<span class="badge err">Từ chối</span>';
-        const xacThuc = r.loaiXacThuc === 'ThủCông'
-          ? '<span class="badge warn" title="Người xử lý: ' + escAttr(r.nguoiXuLyThuCong) + '">Thủ công</span>'
-          : '<span class="small">Khuôn mặt</span>';
-        const anh = r.anhBangChung
-          ? '<a class="anh-link" href="' + escAttr(r.anhBangChung) + '" target="_blank" rel="noopener">Xem ảnh</a>'
-          : '<span class="small">-</span>';
-        const gps = r.coNghiNgoGps
-          ? '<span class="badge warn" title="' + escAttr(r.lyDoNghiNgoGps) + '">Nghi ngờ</span>'
-          : '<span class="small">-</span>';
-        return '<tr><td>' + thoiGian + '</td><td>' + escHtml(r.maNV) + '</td><td>' + escHtml(r.hoTen) + '</td>' +
-          '<td>' + escHtml(r.loaiChamCong) + '</td><td>' + xacThuc + '</td><td>' + escHtml(r.diaDiem) + '</td><td>' + ketQuaBadge + '</td>' +
-          '<td>' + escHtml(r.lyDoTuChoi) + '</td><td>' + anh + '</td><td>' + gps + '</td></tr>';
-      }).join('');
-}
-
-function escHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-function escAttr(s) { return escHtml(s); }
-
-/* ================= XUẤT CSV (cho HR làm lương) ================= */
-let duLieuTongHopHienTai = [];
-let duLieuChiTietHienTai = [];
-
-function taiCsv(tenFile, hangCsv) {
-  const noiDung = hangCsv.map(hang => hang.map(oCsv).join(',')).join('\r\n');
-  const blob = new Blob(['﻿' + noiDung], { type: 'text/csv;charset=utf-8;' }); // ﻿ = BOM để Excel hiển thị đúng dấu tiếng Việt
+/* ============================ XUẤT FILE ============================ */
+function taiFile(tenFile, blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = tenFile;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  a.href = url; a.download = tenFile; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
-
-function oCsv(gia) {
-  const s = String(gia == null ? '' : gia);
-  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
-
-document.getElementById('xuat-csv-tonghop').addEventListener('click', () => {
-  const hang = [['Mã NV', 'Họ tên', 'Tổng giờ công', 'Số lần đi trễ', 'Số lần từ chối']];
-  duLieuTongHopHienTai.forEach(x => hang.push([x.maNV, x.hoTen, x.tongGioCong, x.soLanDiTre, x.soLanTuChoi]));
-  taiCsv('tong-hop-cham-cong.csv', hang);
+$('xuat-csv').addEventListener('click', () => {
+  const o = g => { const s = String(g == null ? '' : g); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const hang = [['Ngày', 'Giờ', 'Mã NV', 'Họ tên', 'Loại', 'Kết quả', 'Xác thực', 'Điểm khớp', 'Địa điểm', 'Lý do', 'Nghi ngờ', 'Lý do nghi ngờ', 'Người xử lý', 'Ghi chú xử lý']];
+  locNhatKy().forEach(r => hang.push([ngayVN(r.ngay), r.gio, r.maNV, r.hoTen, r.loai, r.ketQua, NHAN_XAC_THUC[r.xacThuc] || r.xacThuc, r.diemKhop == null ? '' : r.diemKhop,
+    r.diaDiem, r.lyDo, r.nghiNgo ? 'Có' : '', r.lyDoNghiNgo, r.nguoiXuLy, r.ghiChuXuLy]));
+  taiFile('nhat-ky-cham-cong_' + DATA.tuNgay + '_' + DATA.denNgay + '.csv', new Blob(['﻿' + hang.map(h => h.map(o).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
 });
 
-document.getElementById('xuat-csv-chitiet').addEventListener('click', () => {
-  const hang = [['Thời gian', 'Mã NV', 'Họ tên', 'Loại', 'Xác thực', 'Người xử lý thủ công', 'Địa điểm', 'Kết quả', 'Lý do', 'Nghi ngờ GPS', 'Lý do nghi ngờ GPS']];
-  duLieuChiTietHienTai.forEach(r => hang.push([
-    new Date(r.thoiGian).toLocaleString('vi-VN'), r.maNV, r.hoTen, r.loaiChamCong,
-    r.loaiXacThuc === 'ThủCông' ? 'Thủ công' : 'Khuôn mặt', r.nguoiXuLyThuCong || '',
-    r.diaDiem, r.ketQua, r.lyDoTuChoi || '', r.coNghiNgoGps ? 'Có' : '', r.lyDoNghiNgoGps || ''
-  ]));
-  taiCsv('chi-tiet-cham-cong.csv', hang);
+/* --- Tạo file Excel .xlsx thật ngay trong trình duyệt, không cần thư viện ngoài --- */
+const BANG_CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = BANG_CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function taoZip(files) { // lưu không nén (STORE)
+  const enc = new TextEncoder(), phan = [], muc = [];
+  let offset = 0;
+  files.forEach(f => {
+    const ten = enc.encode(f.ten), nd = enc.encode(f.noiDung), crc = crc32(nd);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+    h.setUint16(10, 0, true); h.setUint16(12, 0x21, true); h.setUint32(14, crc, true); h.setUint32(18, nd.length, true); h.setUint32(22, nd.length, true);
+    h.setUint16(26, ten.length, true); h.setUint16(28, 0, true);
+    phan.push(new Uint8Array(h.buffer), ten, nd);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+    c.setUint16(12, 0, true); c.setUint16(14, 0x21, true); c.setUint32(16, crc, true); c.setUint32(20, nd.length, true); c.setUint32(24, nd.length, true);
+    c.setUint16(28, ten.length, true); c.setUint32(42, offset, true);
+    muc.push(new Uint8Array(c.buffer), ten);
+    offset += 30 + ten.length + nd.length;
+  });
+  const coMuc = muc.reduce((s, x) => s + x.length, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, coMuc, true); e.setUint32(16, offset, true);
+  return new Blob(phan.concat(muc, [new Uint8Array(e.buffer)]), { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+const xmlEsc = s => String(s == null ? '' : s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function tenCot(i) { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = (i - m - 1) / 26; } return s; }
+/** hang: mảng các dòng; mỗi ô là giá trị hoặc { v, s } với s = kiểu (1 tiêu đề, 2 trễ, 3 vắng, 4 nghỉ, 5 đậm, 6 thiếu, 7 xuống dòng) */
+function taoSheetXml(hang, doRongCot, dongCoDinh, cotCoDinh) {
+  let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  if (dongCoDinh || cotCoDinh) {
+    x += '<sheetViews><sheetView workbookViewId="0"><pane' + (cotCoDinh ? ' xSplit="' + cotCoDinh + '"' : '') + (dongCoDinh ? ' ySplit="' + dongCoDinh + '"' : '') +
+      ' topLeftCell="' + tenCot(cotCoDinh || 0) + ((dongCoDinh || 0) + 1) + '" activePane="' + (cotCoDinh && dongCoDinh ? 'bottomRight' : dongCoDinh ? 'bottomLeft' : 'topRight') + '" state="frozen"/></sheetView></sheetViews>';
+  }
+  x += '<cols>' + doRongCot.map((w, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>').join('') + '</cols><sheetData>';
+  hang.forEach((dong, r) => {
+    x += '<row r="' + (r + 1) + '">';
+    dong.forEach((o, c) => {
+      const v = o && typeof o === 'object' ? o.v : o, s = o && typeof o === 'object' && o.s ? ' s="' + o.s + '"' : '';
+      if (v === '' || v == null) { if (s) x += '<c r="' + tenCot(c) + (r + 1) + '"' + s + '/>'; return; }
+      x += typeof v === 'number' ? '<c r="' + tenCot(c) + (r + 1) + '"' + s + '><v>' + v + '</v></c>'
+        : '<c r="' + tenCot(c) + (r + 1) + '"' + s + ' t="inlineStr"><is><t xml:space="preserve">' + xmlEsc(v) + '</t></is></c>';
+    });
+    x += '</row>';
+  });
+  return x + '</sheetData></worksheet>';
+}
+function taoXlsx(sheets) {
+  const fill = mau => '<fill><patternFill patternType="solid"><fgColor rgb="FF' + mau + '"/><bgColor indexed="64"/></patternFill></fill>';
+  const xf = (font, fillId, wrap, ngang) => '<xf numFmtId="0" fontId="' + font + '" fillId="' + fillId + '" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"' + (ngang ? ' horizontal="' + ngang + '"' : '') + (wrap ? ' wrapText="1"' : '') + '/></xf>';
+  const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>' +
+    '<fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' + fill('DCE6F7') + fill('FDE6B8') + fill('F6C6CF') + fill('E8E8E8') + fill('E3D9F7') + '</fills>' +
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFBBBBBB"/></left><right style="thin"><color rgb="FFBBBBBB"/></right><top style="thin"><color rgb="FFBBBBBB"/></top><bottom style="thin"><color rgb="FFBBBBBB"/></bottom><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="8"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    xf(1, 2, true, 'center') + xf(0, 3, true, 'center') + xf(1, 4, true, 'center') + xf(0, 5, true, 'center') + xf(1, 0, false, '') + xf(0, 6, true, 'center') + xf(0, 0, true, 'center') + '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  const files = [
+    { ten: '[Content_Types].xml', noiDung: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      sheets.map((s, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('') + '</Types>' },
+    { ten: '_rels/.rels', noiDung: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { ten: 'xl/workbook.xml', noiDung: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
+      sheets.map((s, i) => '<sheet name="' + xmlEsc(s.ten) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('') + '</sheets></workbook>' },
+    { ten: 'xl/_rels/workbook.xml.rels', noiDung: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      sheets.map((s, i) => '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join('') +
+      '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+    { ten: 'xl/styles.xml', noiDung: styles }
+  ];
+  sheets.forEach((s, i) => files.push({ ten: 'xl/worksheets/sheet' + (i + 1) + '.xml', noiDung: taoSheetXml(s.hang, s.doRong, s.dongCoDinh, s.cotCoDinh) }));
+  return taoZip(files);
+}
+function duLieuExcel() {
+  const ngay = DATA.theoNgay, bc = theoBoPhan(DATA.bangCong), T = v => ({ v, s: 1 });
+  // Sheet 1: bảng công
+  const tieuDe = 'BẢNG CHẤM CÔNG từ ' + ngayVN(DATA.tuNgay) + ' đến ' + ngayVN(DATA.denNgay) + (BO_PHAN ? ' - Bộ phận: ' + BO_PHAN : '');
+  const chuThich = 'Ca chuẩn ' + DATA.cauHinh.gioVao + ' - ' + DATA.cauHinh.gioRa + ', cho phép trễ ' + DATA.cauHinh.phutTre + ' phút. Mỗi ô: giờ vào / giờ ra. V = vắng hoặc không chấm công (hệ thống không phân biệt nghỉ phép). * = có lượt thủ công.';
+  const h1 = [[{ v: tieuDe, s: 5 }], [chuThich], [T('Mã NV'), T('Họ tên'), T('Bộ phận')].concat(ngay.map(d => T(Number(d.ngay.substring(8)) + '\n' + TEN_THU[d.thu])),
+    ['Ngày công', 'Giờ công', 'Số lần trễ', 'Phút trễ', 'Số lần về sớm', 'Ngày thiếu chấm', 'Ngày vắng', 'Lượt bị từ chối'].map(T))];
+  bc.forEach(nv => {
+    const dong = [nv.maNV, nv.hoTen, nv.boPhan];
+    ngay.forEach(d => {
+      const c = nv.ngay[d.ngay];
+      if (c && c.x) dong.push({ v: 'V', s: 3 });
+      else if (c) dong.push({ v: (c.v || '--') + '\n' + (c.r || '--') + (c.tc ? '*' : ''), s: c.t ? 2 : (!c.v || !c.r) ? 6 : 7 });
+      else dong.push(d.lamViec ? '' : { v: '', s: 4 });
+    });
+    dong.push(nv.ngayCong, nv.tongGio, nv.soLanTre, nv.phutTre, nv.soLanVeSom, nv.ngayThieu, nv.ngayVang, nv.soLanTuChoi);
+    h1.push(dong);
+  });
+  // Sheet 2: tổng hợp
+  const h2 = [['Mã NV', 'Họ tên', 'Bộ phận', 'Ngày công', 'Giờ công', 'Số lần trễ', 'Phút trễ', 'Số lần về sớm', 'Ngày thiếu chấm', 'Ngày vắng', 'Lượt bị từ chối'].map(T)];
+  bc.forEach(nv => h2.push([nv.maNV, nv.hoTen, nv.boPhan, nv.ngayCong, nv.tongGio, nv.soLanTre, nv.phutTre, nv.soLanVeSom, nv.ngayThieu, nv.ngayVang, nv.soLanTuChoi]));
+  // Sheet 3: chi tiết
+  const maBP = BO_PHAN ? new Set(bc.map(x => x.maNV)) : null;
+  const h3 = [['Ngày', 'Giờ', 'Mã NV', 'Họ tên', 'Loại', 'Kết quả', 'Xác thực', 'Điểm khớp', 'Địa điểm', 'Lý do', 'Nghi ngờ', 'Người xử lý', 'Ghi chú xử lý'].map(T)];
+  DATA.chiTiet.filter(r => !maBP || maBP.has(r.maNV)).forEach(r => h3.push([ngayVN(r.ngay), r.gio, r.maNV, r.hoTen, r.loai, r.ketQua, NHAN_XAC_THUC[r.xacThuc] || r.xacThuc,
+    r.diemKhop == null ? '' : r.diemKhop, r.diaDiem, r.lyDo, r.nghiNgo ? r.lyDoNghiNgo : '', r.nguoiXuLy, r.ghiChuXuLy]));
+  return [
+    { ten: 'Bảng công', hang: h1, doRong: [9, 22, 14].concat(ngay.map(() => 6.5), [8, 8, 8, 8, 9, 9, 8, 9]), dongCoDinh: 3, cotCoDinh: 2 },
+    { ten: 'Tổng hợp', hang: h2, doRong: [9, 24, 16, 10, 10, 10, 10, 13, 15, 10, 14], dongCoDinh: 1 },
+    { ten: 'Nhật ký', hang: h3, doRong: [11, 7, 9, 22, 7, 12, 13, 10, 18, 40, 40, 16, 30], dongCoDinh: 1 }
+  ];
+}
+$('xuat-excel').addEventListener('click', () => {
+  if (!DATA) return;
+  taiFile('bang-cong_' + DATA.tuNgay + '_' + DATA.denNgay + (BO_PHAN ? '_' + BO_PHAN.replace(/[^\p{L}\p{N}]+/gu, '-') : '') + '.xlsx', taoXlsx(duLieuExcel()));
 });
+
+/* ============================ KHỞI ĐỘNG ============================ */
+if (PHIEN && NGUOI) { hienApp(); datKhoang('thangNay'); taiDuLieu(); }
 </script>
 </body>
 </html>
